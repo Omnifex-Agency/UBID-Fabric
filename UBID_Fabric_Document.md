@@ -2293,67 +2293,633 @@ flowchart TB
 
 ## AI Usage (Strictly Controlled)
 
-### AI Usage Policy
+### AI Architecture Boundary
 
-UBID Fabric uses AI in exactly two places, both offline and both with strict controls:
+UBID Fabric employs AI as a **strictly offline, advisory-only** capability. AI never touches the runtime event processing pipeline, never makes autonomous decisions, and never handles raw PII. The following diagram illustrates the hard boundary between the deterministic runtime path and the AI-assisted offline path:
+
+```mermaid
+graph TB
+    subgraph RUNTIME["🟢 DETERMINISTIC RUNTIME PATH — No AI"]
+        direction TB
+        R1["🔌 Source Connectors"]
+        R2["📝 Canonical Event Builder"]
+        R3["🔍 UBID Resolution Engine"]
+        R4["⚖️ Conflict Convergence Engine\n(CRDT + Policy)"]
+        R5["🗺️ Schema Mapping\n(pre-approved mappings only)"]
+        R6["⚙️ Saga Orchestrator"]
+        R7["📊 Evidence Graph"]
+
+        R1 --> R2 --> R3 --> R4 --> R5 --> R6
+        R6 --> R7
+    end
+
+    subgraph AI_ZONE["🟣 AI-ASSISTED OFFLINE ZONE — Advisory Only"]
+        direction TB
+        AI1["🤖 Use Case 1:\nSchema Mapping Suggestion\n━━━━━━━━━━━━━━━━━━━━\nOnboarding time only\nSynthetic data only"]
+        AI2["🤖 Use Case 2:\nReconciliation Anomaly\nExplanation\n━━━━━━━━━━━━━━━━━━━━\nAggregate stats only\nNo field values"]
+        AI3["🤖 Use Case 3:\nConflict Context\nSummarisation\n━━━━━━━━━━━━━━━━━━━━\nField names + policies only\nNo actual data values"]
+        AI4["🤖 Use Case 4:\nDLQ Root Cause\nAnalysis\n━━━━━━━━━━━━━━━━━━━━\nError codes + patterns only\nNo payload content"]
+        AI5["🤖 Use Case 5:\nOnboarding Readiness\nAssessment\n━━━━━━━━━━━━━━━━━━━━\nSchema structure only\nNo business data"]
+    end
+
+    subgraph SANITIZE["🛡️ Data Sanitisation Layer"]
+        SAN["PII Scrubber\n━━━━━━━━━━━━━━━━━━━━\n• Field values → synthetic\n• Names → placeholder\n• Addresses → randomized\n• UBIDs → scrambled\n• Dates → shifted"]
+    end
+
+    subgraph HUMAN["👤 Human Gate — Mandatory"]
+        HG["Every AI output MUST be\nreviewed and approved\nby a human before any\naction is taken"]
+    end
+
+    R7 -.->|"metadata only\n(no PII)"| SANITIZE
+    SANITIZE -->|"sanitised\ncontext"| AI_ZONE
+    AI_ZONE -->|"suggestions\nonly"| HUMAN
+    HUMAN -->|"approved\nactions"| RUNTIME
+
+    style RUNTIME fill:#0d3b2e,stroke:#2ecc71,color:#fff,stroke-width:4px
+    style AI_ZONE fill:#2c1a3e,stroke:#9b59b6,color:#fff,stroke-width:3px
+    style SANITIZE fill:#1a1a2e,stroke:#e74c3c,color:#fff,stroke-width:3px
+    style HUMAN fill:#3d3100,stroke:#f1c40f,color:#fff,stroke-width:3px
+    style R1 fill:#145a32,stroke:#27ae60,color:#fff
+    style R2 fill:#145a32,stroke:#27ae60,color:#fff
+    style R3 fill:#145a32,stroke:#27ae60,color:#fff
+    style R4 fill:#145a32,stroke:#27ae60,color:#fff
+    style R5 fill:#145a32,stroke:#27ae60,color:#fff
+    style R6 fill:#145a32,stroke:#27ae60,color:#fff
+    style R7 fill:#145a32,stroke:#27ae60,color:#fff
+    style AI1 fill:#4a235a,stroke:#8e44ad,color:#fff
+    style AI2 fill:#4a235a,stroke:#8e44ad,color:#fff
+    style AI3 fill:#4a235a,stroke:#8e44ad,color:#fff
+    style AI4 fill:#4a235a,stroke:#8e44ad,color:#fff
+    style AI5 fill:#4a235a,stroke:#8e44ad,color:#fff
+    style SAN fill:#922b21,stroke:#e74c3c,color:#fff
+    style HG fill:#7d6608,stroke:#f1c40f,color:#fff
+```
+
+### AI Governance Principles
+
+| Principle | Implementation | Rationale |
+|---|---|---|
+| **No AI in the runtime path** | AI services are deployed in a separate namespace with no network access to Kafka, Redis, or department APIs. Kubernetes NetworkPolicy enforces this at the infrastructure level. | AI inference latency and non-determinism are unacceptable in a system that guarantees deterministic convergence. |
+| **No raw PII to any AI model** | All data passes through a mandatory PII scrubbing pipeline before reaching any AI component. This is enforced at the API gateway level — the AI service physically cannot receive unscrubbed data. | Government data protection requirements prohibit sending citizen business data to external or AI services. |
+| **Human approval is mandatory** | Every AI output is tagged as `status: SUGGESTION` and cannot be promoted to `status: ACTIVE` without a human reviewer's explicit approval recorded in the evidence graph. | AI suggestions may be incorrect. In a government context, AI errors in field mappings could cause data corruption across 40+ department systems. |
+| **AI decisions are auditable** | Every AI suggestion, the human decision on that suggestion (approve/modify/reject), and the resulting action are recorded as nodes in the evidence graph with full causal links. | Government audit requires traceability of all decisions, including those informed by AI. |
+| **AI is replaceable** | All AI use cases have a manual fallback. If the AI component is removed entirely, the system continues to function — humans perform all tasks manually. AI is an accelerator, not a dependency. | No single vendor or model dependency. The system must function without any AI component. |
+
+### Data Sanitisation Pipeline
+
+Before any data reaches an AI component, it passes through a mandatory sanitisation pipeline. This pipeline operates at the API gateway level — the AI service is physically incapable of receiving unsanitised data.
+
+```mermaid
+flowchart TB
+    subgraph INPUT["📥 Raw Context (from Evidence Graph / Schema Registry)"]
+        direction LR
+        I1["Field names"]
+        I2["Schema structures"]
+        I3["Error codes & messages"]
+        I4["Aggregate statistics"]
+        I5["⚠️ Field values (PII)"]
+        I6["⚠️ Business names (PII)"]
+        I7["⚠️ Addresses (PII)"]
+        I8["⚠️ UBIDs (identifiable)"]
+    end
+
+    subgraph SCRUB["🛡️ PII Scrubber (Mandatory Gateway)"]
+        direction TB
+        S1["Field values → synthetic placeholder\n'Rajesh Kumar' → 'PERSON_NAME_001'"]
+        S2["Business names → generic\n'Acme Industries Pvt Ltd' → 'BUSINESS_ENTITY_042'"]
+        S3["Addresses → randomised\n'123 MG Road, Bengaluru' → 'ADDR_SYNTHETIC_007'"]
+        S4["UBIDs → scrambled\n'UBID-KA-2024-00000847' → 'UBID-SCRUB-XXXX-000001'"]
+        S5["Dates → shifted by random offset\n'2024-03-15' → '2024-07-22' (shifted +129 days)"]
+        S6["Phone/email → fully removed"]
+    end
+
+    subgraph OUTPUT["✅ Sanitised Context (safe for AI)"]
+        direction LR
+        O1["✅ Field names (unchanged)"]
+        O2["✅ Schema structures (unchanged)"]
+        O3["✅ Error codes (unchanged)"]
+        O4["✅ Statistics (unchanged)"]
+        O5["✅ Synthetic values"]
+        O6["✅ Generic placeholders"]
+    end
+
+    INPUT --> SCRUB --> OUTPUT
+    OUTPUT -->|"POST /ai/suggest"| AI["🤖 AI Model\n(Gemini / Claude)"]
+
+    I5 & I6 & I7 & I8 -.->|"❌ BLOCKED\nnever reaches AI"| SCRUB
+
+    style INPUT fill:#1a1a2e,stroke:#4a90d9,color:#fff,stroke-width:2px
+    style SCRUB fill:#922b21,stroke:#e74c3c,color:#fff,stroke-width:3px
+    style OUTPUT fill:#0d3b2e,stroke:#2ecc71,color:#fff,stroke-width:2px
+    style AI fill:#4a235a,stroke:#9b59b6,color:#fff,stroke-width:2px
+    style I5 fill:#c0392b,stroke:#e74c3c,color:#fff
+    style I6 fill:#c0392b,stroke:#e74c3c,color:#fff
+    style I7 fill:#c0392b,stroke:#e74c3c,color:#fff
+    style I8 fill:#c0392b,stroke:#e74c3c,color:#fff
+    style S1 fill:#7a2a2a,stroke:#e74c3c,color:#fff
+    style S2 fill:#7a2a2a,stroke:#e74c3c,color:#fff
+    style S3 fill:#7a2a2a,stroke:#e74c3c,color:#fff
+    style S4 fill:#7a2a2a,stroke:#e74c3c,color:#fff
+    style S5 fill:#7a2a2a,stroke:#e74c3c,color:#fff
+    style S6 fill:#7a2a2a,stroke:#e74c3c,color:#fff
+```
+
+---
 
 ### Use Case 1: Schema Mapping Suggestion
 
 **When:** Onboarding a new department system.
 
-**What:** When a new department system is onboarded, Claude (or equivalent LLM) analyses the department's schema alongside the SWS schema and suggests initial field correspondences.
+**What:** When a new department system is onboarded, an LLM (Gemini or Claude) analyses the department's schema alongside the SWS canonical schema and suggests initial field correspondences, transformation functions, and validation rules.
+
+**Why AI helps here:** Manual schema mapping for a complex department system with 50–200 fields takes 2–3 days of domain expert time. AI reduces this to 2–3 hours of review time (AI generates, human validates). With 40+ department systems to onboard, this is a force multiplier.
 
 **Controls:**
-- **Data:** Only synthetic or scrambled data is used. Never raw PII.
-- **Offline only:** AI analysis runs during onboarding, not during real-time event processing.
-- **Human approval required:** Every AI suggestion is reviewed and approved by a human domain expert before the mapping is promoted.
-- **Shadow mode verification:** Even after human approval, the mapping runs in shadow mode before going live.
+- **Data:** Only schema structure (field names, types, constraints) and synthetic sample data are used. Never raw PII.
+- **Offline only:** AI analysis runs during onboarding setup, never during real-time event processing.
+- **Human approval required:** Every AI suggestion is reviewed field-by-field and approved by a human domain expert before the mapping enters shadow mode.
+- **Shadow mode verification:** Even after human approval, the mapping runs in shadow mode alongside the active mapping. Only after shadow mode verification is the mapping promoted to production.
 
-**Workflow:**
+**Prompt Engineering — Schema Mapping:**
+
+```
+SYSTEM PROMPT:
+You are a schema mapping specialist for Karnataka's government 
+interoperability system. You analyse department database schemas 
+and suggest field-level correspondences to the canonical SWS schema.
+
+RULES:
+1. Suggest mappings ONLY for fields you are confident about (>80%)
+2. For each mapping, provide: source_field, target_field, 
+   transform_type, confidence_score, and reasoning
+3. Flag fields that have no obvious mapping as UNMAPPED
+4. Flag fields that may need complex transformation as NEEDS_REVIEW
+5. All sample data is SYNTHETIC — do not treat it as real
+
+INPUT:
+=== SWS Canonical Schema ===
+- registered_address (STRING, max 500)
+- business_name (STRING, max 200)
+- authorised_signatories (SET<STRING>)
+- establishment_date (DATE, ISO 8601)
+- employee_count (INTEGER, >= 0)
+- business_type (ENUM: factory|shop|service|other)
+
+=== Department Schema (FACTORIES) ===
+- factory_address_line1 (VARCHAR(200))
+- factory_address_line2 (VARCHAR(200))
+- factory_name (VARCHAR(300))
+- signatory_name (VARCHAR(100))
+- date_of_registration (VARCHAR(10), format DD/MM/YYYY)
+- num_workers (INT)
+- unit_type (VARCHAR(50), values: 'manufacturing', 'processing')
+
+OUTPUT FORMAT:
+[
+  {
+    "source_field": "...",
+    "target_field": "...",
+    "transform": "SPLIT_ADDRESS | JOIN_ADDRESS | DATE_FORMAT | 
+                  ENUM_MAP | DIRECT_COPY | SET_EXTRACT | ...",
+    "confidence": 0.0 - 1.0,
+    "reasoning": "...",
+    "needs_review": true/false
+  }
+]
+```
+
+**Example AI Output (for the prompt above):**
+
+```json
+[
+  {
+    "source_field": "SWS.registered_address",
+    "target_field": "FACTORIES.factory_address_line1 + factory_address_line2",
+    "transform": "SPLIT_ADDRESS",
+    "confidence": 0.92,
+    "reasoning": "SWS stores full address as single field; Factories splits into line1 (street) and line2 (city/state). Split at last comma boundary.",
+    "needs_review": true
+  },
+  {
+    "source_field": "SWS.establishment_date",
+    "target_field": "FACTORIES.date_of_registration",
+    "transform": "DATE_FORMAT_ISO_TO_DDMMYYYY",
+    "confidence": 0.97,
+    "reasoning": "Both represent registration date. SWS uses ISO 8601 (YYYY-MM-DD), Factories uses DD/MM/YYYY string format.",
+    "needs_review": false
+  },
+  {
+    "source_field": "SWS.authorised_signatories",
+    "target_field": "FACTORIES.signatory_name",
+    "transform": "PRIMARY_SIGNATORY_EXTRACT",
+    "confidence": 0.78,
+    "reasoning": "SWS stores multiple signatories as a set; Factories stores only one signatory as a string. Extracting primary signatory requires business logic. NEEDS HUMAN REVIEW.",
+    "needs_review": true
+  },
+  {
+    "source_field": "SWS.business_type",
+    "target_field": "FACTORIES.unit_type",
+    "transform": "ENUM_MAP",
+    "confidence": 0.65,
+    "reasoning": "Partial overlap: 'factory' maps to 'manufacturing' or 'processing'. Disambiguation requires domain knowledge. NEEDS HUMAN REVIEW.",
+    "needs_review": true
+  }
+]
+```
+
+**Complete Workflow:**
 
 ```mermaid
 flowchart TB
-    A["📄 Department schema received"] --> B["🤖 AI analyses schema structure<br/>(on synthetic data only)"]
-    B --> C["💡 AI suggests field correspondences<br/>with confidence scores"]
-    C --> D{"👤 Human domain expert<br/>reviews each suggestion"}
+    A["📄 Department schema received\n(field names, types, constraints)"] --> B["🛡️ Data Sanitisation\nSample data → synthetic\nField values → placeholders"]
+    B --> C["🤖 AI analyses schema structure\n(on synthetic data only)\nPrompt includes canonical schema\nand department schema"]
+    C --> D["💡 AI suggests field correspondences\nwith confidence scores\nand transformation types"]
+    D --> E{"👤 Human domain expert\nreviews EACH suggestion"}
 
-    D -->|"✅ Approve"| E["Mapping enters shadow mode"]
-    D -->|"✏️ Modify"| F["Human corrects mapping"] --> E
-    D -->|"❌ Reject"| G["Human creates mapping manually"] --> E
+    E -->|"✅ Approve\n(high confidence suggestions)"| F["Mapping enters shadow mode"]
+    E -->|"✏️ Modify\n(partially correct suggestions)"| G["Human corrects mapping\nadjusts transform logic"] --> F
+    E -->|"❌ Reject\n(wrong suggestions)"| H["Human creates mapping manually\nfor rejected fields"] --> F
 
-    E --> H["🔄 Shadow mode:<br/>Parallel execution, output comparison"]
-    H --> I{"👤 Human reviewer approves<br/>shadow mode results?"}
-    I -->|"✅ Yes"| J["🚀 Mapping promoted to ACTIVE"]
-    I -->|"❌ No"| K["Return to mapping adjustment"] --> E
+    F --> I["🔄 Shadow mode:\nParallel execution vs. active mapping\nOutput compared field-by-field"]
+    I --> J{"Discrepancy rate?"}
+
+    J -->|"< 1% — Acceptable"| K{"👤 Human reviewer\napproves shadow results?"}
+    J -->|"> 1% — Too many errors"| L["Return to mapping\nadjustment"] --> F
+
+    K -->|"✅ Approved"| M["🚀 Mapping promoted to ACTIVE\nPrevious version archived"]
+    K -->|"❌ Rejected"| L
+
+    N["📊 AI Suggestion Audit\n━━━━━━━━━━━━━━━━━━━━━━\nRecorded in evidence graph:\n• AI model + version\n• Prompt hash\n• All suggestions\n• Human decisions\n• Shadow mode results"]
+
+    D -.->|"audit"| N
+    E -.->|"audit"| N
+    M -.->|"audit"| N
 
     style A fill:#2c3e50,stroke:#ecf0f1,color:#fff,stroke-width:2px
-    style B fill:#8e44ad,stroke:#6c3483,color:#fff
-    style C fill:#9b59b6,stroke:#8e44ad,color:#fff
-    style D fill:#f39c12,stroke:#e67e22,color:#fff,stroke-width:2px
-    style E fill:#2980b9,stroke:#1a5276,color:#fff
-    style H fill:#3498db,stroke:#2980b9,color:#fff
-    style I fill:#f39c12,stroke:#e67e22,color:#fff,stroke-width:2px
-    style J fill:#27ae60,stroke:#1e8449,color:#fff,stroke-width:3px
+    style B fill:#922b21,stroke:#e74c3c,color:#fff
+    style C fill:#8e44ad,stroke:#6c3483,color:#fff
+    style D fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style E fill:#f39c12,stroke:#e67e22,color:#fff,stroke-width:2px
+    style F fill:#2980b9,stroke:#1a5276,color:#fff
+    style I fill:#3498db,stroke:#2980b9,color:#fff
+    style J fill:#e67e22,stroke:#d35400,color:#fff
+    style K fill:#f39c12,stroke:#e67e22,color:#fff,stroke-width:2px
+    style M fill:#27ae60,stroke:#1e8449,color:#fff,stroke-width:3px
+    style N fill:#0d3b2e,stroke:#1abc9c,color:#fff,stroke-width:2px
 ```
 
-### Use Case 2: Anomaly Explanation
+**Impact Measurement:**
 
-**When:** Reconciliation engine detects drift patterns.
+| Metric | Without AI | With AI (human-reviewed) |
+|---|---|---|
+| Time to create initial mapping | 2–3 days (manual) | 2–3 hours (AI + review) |
+| Mapping accuracy (post-review) | 95–98% (fully human) | 97–99% (AI draft + human correction) |
+| Human review time per field | N/A | ~2 minutes per suggestion |
+| Fields flagged for manual review | All fields | Only 15–25% (low-confidence) |
 
-**What:** The reconciliation engine can use AI to generate plain-language explanations of detected drift patterns for the reviewer dashboard.
+---
+
+### Use Case 2: Reconciliation Anomaly Explanation
+
+**When:** Reconciliation engine detects drift patterns that are not immediately obvious.
+
+**What:** The reconciliation engine generates statistical summaries of drift patterns and sends them to an AI model. The AI produces plain-language explanations of what might be causing the drift, which are displayed on the reviewer dashboard.
+
+**Why AI helps here:** Drift patterns can be complex — e.g., "67% of address fields in FACTORIES drifted after 6PM on weekdays." A human reviewer looking at raw statistics might miss the temporal pattern. AI can surface hypotheses like "This pattern suggests an automated batch job in FACTORIES that overwrites propagated values."
 
 **Controls:**
 - **Input:** Only aggregate statistics and field names — no actual field values or PII.
 - **Output:** Natural language explanation displayed on dashboard for human review.
-- **No automated action:** AI explanations are informational only. No automated decisions are made based on AI output.
+- **No automated action:** AI explanations are informational only. No automated decisions are made based on AI output. The reviewer reads the explanation and decides what to do.
+- **Confidence qualifier:** Every AI explanation is tagged with "This is an AI-generated hypothesis. Verify before taking action."
+
+**Example Input to AI (after sanitisation):**
+
+```json
+{
+  "drift_summary": {
+    "target_system": "FACTORIES",
+    "time_window": "2024-03-10 to 2024-03-17",
+    "total_records_checked": 12847,
+    "drifted_records": 847,
+    "drift_rate": "6.59%",
+    "drifted_fields": {
+      "factory_address_line1": 612,
+      "factory_address_line2": 598,
+      "date_of_registration": 3
+    },
+    "temporal_pattern": {
+      "monday_to_friday_6pm_to_11pm": "89% of drifts",
+      "weekend": "2% of drifts",
+      "weekday_business_hours": "9% of drifts"
+    },
+    "recovery_pattern": {
+      "auto_repair_success_rate": "94%",
+      "manual_escalation_rate": "6%"
+    }
+  }
+}
+```
+
+**Example AI Output:**
+
+```
+ANOMALY EXPLANATION (AI-generated hypothesis — verify before acting):
+
+The drift pattern in FACTORIES suggests an automated batch process 
+that runs on weekday evenings (6PM–11PM), which overwrites address 
+fields with values from a separate data source. Key observations:
+
+1. TEMPORAL CORRELATION: 89% of drifts occur in the 6PM–11PM 
+   weekday window, consistent with a nightly batch job.
+
+2. FIELD SPECIFICITY: Address fields (line1, line2) account for 
+   99.5% of drifts. Registration dates are almost never affected.
+   This suggests the batch process specifically targets address data.
+
+3. RECOVERY RATE: 94% of drifts are auto-repaired by the next 
+   reconciliation cycle, suggesting the batch values are transient 
+   and UBID Fabric's re-propagation is effective.
+
+RECOMMENDED INVESTIGATION:
+- Check FACTORIES system logs for scheduled jobs running between 
+  6PM and 11PM on weekdays
+- Contact FACTORIES DBA to identify any ETL or sync processes 
+  that modify address fields
+- Consider adjusting reconciliation frequency for FACTORIES 
+  address fields to every 2 hours instead of every 6 hours
+
+⚠️ This is an AI-generated hypothesis. Verify with the FACTORIES 
+system team before taking any action.
+```
+
+```mermaid
+flowchart TB
+    RECON["🔄 Reconciliation Engine\nDetects drift pattern"] --> STATS["📊 Generate Aggregate Stats\n(field names, counts, rates,\ntemporal patterns — NO values)"]
+    STATS --> SCRUB["🛡️ PII Scrubber\nVerify: no field values\nno business names\nno addresses in payload"]
+    SCRUB --> AI["🤖 AI Model\nAnalyse drift patterns\nGenerate hypothesis"]
+    AI --> TAG["⚠️ Tag Output\n'AI-generated hypothesis'\n'Verify before acting'"]
+    TAG --> DASH["🖥️ Reviewer Dashboard\nDisplay explanation alongside\nraw statistics"]
+    DASH --> HUMAN{"👤 Reviewer Decision"}
+
+    HUMAN -->|"Investigate"| INV["📋 Investigation task created\nwith AI hypothesis as context"]
+    HUMAN -->|"Adjust config"| ADJ["⚙️ Reconciliation frequency\nor scope adjusted"]
+    HUMAN -->|"Dismiss"| DIS["📝 Noted as informational\nNo action needed"]
+
+    style RECON fill:#1a5276,stroke:#2980b9,color:#fff
+    style STATS fill:#2c3e50,stroke:#ecf0f1,color:#fff
+    style SCRUB fill:#922b21,stroke:#e74c3c,color:#fff,stroke-width:2px
+    style AI fill:#4a235a,stroke:#9b59b6,color:#fff,stroke-width:2px
+    style TAG fill:#7d6608,stroke:#f1c40f,color:#fff
+    style DASH fill:#1a3c5e,stroke:#3498db,color:#fff
+    style HUMAN fill:#f39c12,stroke:#e67e22,color:#fff,stroke-width:2px
+    style INV fill:#2980b9,stroke:#1a5276,color:#fff
+    style ADJ fill:#e67e22,stroke:#d35400,color:#fff
+    style DIS fill:#7f8c8d,stroke:#566573,color:#fff
+```
+
+---
+
+### Use Case 3: Conflict Context Summarisation
+
+**When:** A conflict reaches Level 4 (manual review escalation) in the Conflict Convergence Engine.
+
+**What:** When a conflict is escalated to the Manual Review Console, AI generates a plain-language summary of the conflict context — what happened, why automated resolution failed, what the competing values are, and what previous similar conflicts were resolved to — so the reviewer can make an informed decision faster.
+
+**Why AI helps here:** Level 4 conflicts involve multiple failed policy checks, competing events from different systems, and potentially complex causal histories in the evidence graph. A reviewer looking at raw JSON events and policy configurations would spend 15–30 minutes understanding the context. AI reduces this to a 2–3 minute summary read.
+
+**Controls:**
+- **Input:** Field names, source system identifiers, policy names and versions, resolution levels attempted, timestamps. No actual field values.
+- **Output:** Plain-language context summary displayed alongside the conflict in the Manual Review Console.
+- **No decision authority:** AI suggests nothing about which value should win. It only describes the context.
+- **Fallback:** If AI is unavailable, the reviewer sees the raw event data and policy details directly (the system worked this way before AI was added).
+
+**Example Input (sanitised):**
+
+```json
+{
+  "conflict_id": "conf-SCRUB-001",
+  "field": "registered_address",
+  "ubid": "UBID-SCRUB-XXXX-000001",
+  "competing_events": [
+    {
+      "event_id": "evt-SCRUB-A",
+      "source_system": "SWS",
+      "lamport_ts": 300,
+      "value": "ADDR_SYNTHETIC_001"
+    },
+    {
+      "event_id": "evt-SCRUB-B",
+      "source_system": "SHOP_ESTABLISHMENT",
+      "lamport_ts": 301,
+      "value": "ADDR_SYNTHETIC_002"
+    }
+  ],
+  "resolution_attempts": [
+    {"level": 1, "method": "LWW_REGISTER", "result": "evt-B wins (higher ts)", "status": "OVERRIDDEN_BY_L2"},
+    {"level": 2, "method": "SOURCE_PRIORITY", "result": "SWS wins (priority 1)", "status": "OVERRIDDEN_BY_L3"},
+    {"level": 3, "method": "DOMAIN_OWNERSHIP", "result": "No rule for registered_address", "status": "NO_RULE"},
+    {"level": 4, "method": "MANUAL_ESCALATION", "status": "PENDING"}
+  ],
+  "similar_past_conflicts": 3,
+  "past_resolutions": ["SWS won 2 times", "Department won 1 time"]
+}
+```
+
+**Example AI Output:**
+
+```
+CONFLICT CONTEXT SUMMARY (AI-generated — for reviewer context only):
+
+Two sources updated the same address field for the same business 
+within 1 second of each other.
+
+RESOLUTION ATTEMPTS:
+• Level 1 (CRDT): LWW would pick Shop Estb. value (higher timestamp)
+• Level 2 (Source Priority): Policy overrides to SWS 
+  (SWS has priority 1 for registration fields)  
+• Level 3 (Domain Ownership): No domain rule exists for 
+  'registered_address' — this is a shared field
+• Result: Levels 2 and 3 conflict with each other — escalated to you
+
+HISTORICAL CONTEXT:
+• 3 similar conflicts for 'registered_address' in the past 30 days
+• SWS value was selected 2/3 times by reviewers
+• Shop Estb. value was selected 1/3 times (reviewer noted: 
+  "field verification report provided stronger evidence")
+
+NOTE: This summary does not recommend a resolution. 
+Review both values and supporting evidence.
+```
+
+---
+
+### Use Case 4: DLQ Root Cause Analysis
+
+**When:** Dead-letter queue depth exceeds the warning threshold (> 50 events).
+
+**What:** AI analyses the error codes, failure patterns, target system identifiers, and temporal distribution of DLQ entries to suggest probable root causes and recommended investigation steps.
+
+**Why AI helps here:** When a department system starts failing, DLQ entries accumulate rapidly. An operations engineer looking at 50+ individual error entries may take 30–60 minutes to identify the pattern. AI can surface hypotheses like "All failures are HTTP 401 from FACTORIES, suggesting credential expiration" in seconds.
+
+**Controls:**
+- **Input:** Error codes, HTTP status codes, target system names, timestamps, retry counts. No request/response payloads.
+- **Output:** Probable root cause hypothesis with suggested investigation steps.
+- **No automated remediation:** AI never triggers credential refresh, mapping changes, or system restarts. It only suggests what the engineer should investigate.
+
+```mermaid
+flowchart TB
+    DLQ["📭 DLQ Depth > 50\nAlert triggered"] --> COLLECT["📊 Collect DLQ Metadata\n━━━━━━━━━━━━━━━━━━━━━━\n• Error codes (HTTP 401, 503, etc.)\n• Target systems (FACTORIES, etc.)\n• Temporal distribution\n• Retry counts\n• Failure rates by system"]
+    COLLECT --> SCRUB["🛡️ PII Scrubber\nRemove all payloads\nKeep only error metadata"]
+    SCRUB --> AI["🤖 AI Analysis\nPattern recognition\nRoot cause hypothesis"]
+    AI --> OUTPUT["📋 AI Report\n━━━━━━━━━━━━━━━━━━━━━━\nProbable cause: credential expiration\nEvidence: 100% of failures are HTTP 401\nAffected system: FACTORIES\nSuggested action: Check Vault for\nexpired service account credentials"]
+    OUTPUT --> TAG2["⚠️ 'AI-generated — verify before acting'"]
+    TAG2 --> OPS["📟 Operations Engineer\nReviews AI hypothesis\nInvestigates actual root cause"]
+
+    OPS -->|"Confirmed"| FIX["🔧 Apply fix\n(credential refresh, etc.)"]
+    OPS -->|"Wrong hypothesis"| MANUAL["📋 Manual investigation\nAI hypothesis dismissed"]
+
+    FIX --> REPLAY["🔄 Replay DLQ events\nafter fix is applied"]
+
+    style DLQ fill:#922b21,stroke:#e74c3c,color:#fff,stroke-width:2px
+    style COLLECT fill:#2c3e50,stroke:#ecf0f1,color:#fff
+    style SCRUB fill:#922b21,stroke:#e74c3c,color:#fff
+    style AI fill:#4a235a,stroke:#9b59b6,color:#fff,stroke-width:2px
+    style OUTPUT fill:#1a3c5e,stroke:#3498db,color:#fff
+    style TAG2 fill:#7d6608,stroke:#f1c40f,color:#fff
+    style OPS fill:#f39c12,stroke:#e67e22,color:#fff,stroke-width:2px
+    style FIX fill:#27ae60,stroke:#1e8449,color:#fff
+    style REPLAY fill:#2980b9,stroke:#1a5276,color:#fff
+    style MANUAL fill:#7f8c8d,stroke:#566573,color:#fff
+```
+
+---
+
+### Use Case 5: Onboarding Readiness Assessment
+
+**When:** A new department system is being evaluated for integration with UBID Fabric.
+
+**What:** AI analyses the department system's API documentation, schema exports, and capability descriptions to produce a readiness assessment: which connector tier is appropriate, what the expected schema mapping complexity will be, which fields are likely to map directly vs. need transformation, and what potential challenges to anticipate.
+
+**Why AI helps here:** Evaluating a department system's integration readiness currently requires a senior integration architect to spend 1–2 days reviewing documentation. AI can produce a first-pass assessment in minutes, allowing the architect to focus on edge cases and ambiguities.
+
+**Controls:**
+- **Input:** API documentation (redacted of any business data), schema DDL or exports, system capability questionnaire responses. No business data.
+- **Output:** Readiness report with tier recommendation, complexity estimate, and risk flags.
+- **Human validation:** Assessment is reviewed by an integration architect before any onboarding work begins.
+
+**Example AI Assessment Output:**
+
+```
+ONBOARDING READINESS ASSESSMENT — EXCISE DEPARTMENT
+(AI-generated — review with integration architect)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RECOMMENDED TIER: Tier 3 (Snapshot Diff)
+
+REASONING:
+• No webhook or event capability documented
+• REST API exists but lacks modified_since or cursor parameters
+• No database access available (hosted by NIC, access denied)
+• Bulk export endpoint available: GET /api/v1/licences/export
+
+SCHEMA MAPPING COMPLEXITY: MEDIUM-HIGH
+
+FIELD ANALYSIS (42 fields total):
+• Direct mapping (likely): 18 fields (43%)
+• Transformation needed: 15 fields (36%)
+• Unmappable (no SWS equivalent): 6 fields (14%)
+• Ambiguous (needs domain expert): 3 fields (7%)
+
+KEY RISKS:
+1. Bulk export endpoint returns XML (not JSON) — 
+   connector needs XML parser
+2. Date fields use DD-MON-YYYY format ('15-MAR-2024') — 
+   non-standard, needs custom date parser
+3. 'licence_status' uses department-specific codes 
+   (A/S/C/R) that don't map to SWS status enum directly
+
+ESTIMATED ONBOARDING TIME:
+• Connector development: 3–4 days (Tier 3 with XML)
+• Schema mapping: 2–3 days (medium-high complexity)
+• Shadow mode validation: 3–5 days
+• Total: ~2 weeks
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+### AI Decision Audit Trail
+
+Every interaction with AI is recorded in the evidence graph, creating a complete audit trail of how AI influenced the system:
+
+```json
+{
+  "node_type": "AI_INTERACTION",
+  "interaction_id": "ai-20240315-001",
+  "use_case": "SCHEMA_MAPPING_SUGGESTION",
+  "ai_model": "gemini-2.5-pro",
+  "model_version": "2025-03-01",
+  "prompt_hash": "sha256:a1b2c3d4e5...",
+  "sanitisation_applied": true,
+  "pii_fields_scrubbed": 12,
+  "input_summary": {
+    "source_schema_fields": 42,
+    "target_schema_fields": 38,
+    "synthetic_samples_provided": 5
+  },
+  "output_summary": {
+    "suggestions_generated": 28,
+    "high_confidence": 18,
+    "needs_review": 7,
+    "unmapped": 3
+  },
+  "human_review": {
+    "reviewer_id": "architect-001",
+    "review_timestamp": "2024-03-15T14:30:00Z",
+    "approved": 22,
+    "modified": 4,
+    "rejected": 2,
+    "time_spent_minutes": 45
+  },
+  "shadow_mode_result": {
+    "events_processed": 1247,
+    "discrepancy_rate": "0.3%",
+    "promoted_to_active": true,
+    "promotion_timestamp": "2024-03-18T09:00:00Z"
+  }
+}
+```
+
+### AI vs. Deterministic — Clear Separation Matrix
+
+| Capability | Deterministic (Runtime) | AI-Assisted (Offline) | Why This Split |
+|---|---|---|---|
+| **Event processing** | ✅ CRDT merge, Lamport timestamps | ❌ Never | Determinism is non-negotiable for state convergence |
+| **Conflict resolution** | ✅ 4-level ladder (CRDT → Policy → Domain → Human) | ❌ Never | Resolution must be provably correct and reproducible |
+| **UBID resolution** | ✅ Multi-factor scoring algorithm | ❌ Never | Identity determination requires deterministic confidence scoring |
+| **Schema mapping creation** | ❌ Too slow manually at scale | ✅ Suggests initial mappings | AI accelerates; human validates; shadow mode catches errors |
+| **Schema mapping execution** | ✅ Pre-approved version-pinned mappings | ❌ Never | Runtime mapping must be deterministic and auditable |
+| **Drift pattern analysis** | ✅ Statistical detection | ✅ Hypothesis generation | Detection is deterministic; explanation benefits from AI |
+| **Conflict context for reviewers** | ✅ Raw data always available | ✅ Summarisation for faster review | AI summary is optional convenience; raw data is always primary |
+| **DLQ triage** | ✅ Error categorisation | ✅ Root cause hypothesis | AI speeds up investigation; engineer verifies |
+| **Onboarding assessment** | ❌ Time-consuming manual review | ✅ First-pass readiness report | AI draft reviewed by architect; saves 1–2 days per system |
+| **Propagation decisions** | ✅ Saga orchestrator | ❌ Never | Write decisions must be deterministic and idempotent |
+| **Any operation with raw PII** | ✅ Internal processing only | ❌ Never — PII scrubbed | Government data protection compliance |
 
 ### What AI Is NOT Used For
 
-- ❌ Runtime event processing
-- ❌ Conflict resolution decisions
-- ❌ UBID resolution
-- ❌ Propagation decisions
-- ❌ Any processing involving raw PII
+The following is an explicit exclusion list — these areas are permanently outside the scope of AI involvement in UBID Fabric:
+
+- ❌ **Runtime event processing** — Events are processed by deterministic code paths, never by AI models
+- ❌ **Conflict resolution decisions** — CRDTs and policy rules decide; AI never influences which value wins
+- ❌ **UBID resolution** — The multi-factor scoring algorithm is deterministic; AI is not involved
+- ❌ **Propagation decisions** — The saga orchestrator decides when and where to write; AI has no role
+- ❌ **Any processing involving raw PII** — The PII scrubber is a mandatory gateway; AI physically cannot access unsanitised data
+- ❌ **Automated remediation** — AI never triggers fixes, restarts, credential refreshes, or configuration changes
+- ❌ **Evidence graph writes** — AI output is recorded as `AI_INTERACTION` nodes, but AI never writes `CONFLICT_RESOLUTION`, `PROPAGATION_WRITE`, or any operational node type
 
 ---
 
