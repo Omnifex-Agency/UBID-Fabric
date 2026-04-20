@@ -608,6 +608,71 @@ Each source system gets a dedicated connector instance. The connector encapsulat
 | **CDC Connector** | Uses Debezium to capture row-level changes from the system's database transaction log | 1–5 seconds | System's database is accessible and supports CDC (PostgreSQL, MySQL, etc.) |
 | **Snapshot Connector** | Periodically captures a full or partial snapshot of the system's state and diffs it against the previous snapshot | 1–15 minutes | System has opaque API with no delta capability and no database access |
 
+**Connector Tier Architecture:**
+
+The following diagram shows how each tier of source system connects to UBID Fabric through its dedicated connector type, and how all tiers produce the same uniform `RawChange` output regardless of the detection method:
+
+```mermaid
+graph TB
+    subgraph TIER1["🟢 Tier 1 — Webhook / Event-Driven"]
+        direction LR
+        T1S1["SWS Portal"]
+        T1S2["Commercial Taxes"]
+        T1S3["Modern Dept [5-8]"]
+        T1C["🔌 Webhook Connector\n━━━━━━━━━━━━━━━━━━━━\nHTTP POST listener\nSignature verification\nImmediate ACK\nGap detection"]
+        T1S1 & T1S2 & T1S3 -->|"push event"| T1C
+    end
+
+    subgraph TIER2["🟡 Tier 2 — Polling / CDC"]
+        direction LR
+        T2S1["Factories"]
+        T2S2["Shop Estb."]
+        T2S3["Semi-modern [10-15]"]
+        T2CA["🔌 Polling Connector\n━━━━━━━━━━━━━━━━━━━━\nGET /api?modified_since=\nCursor-based pagination\n5-30s intervals"]
+        T2CB["🔌 CDC Connector\n━━━━━━━━━━━━━━━━━━━━\nDebezium on WAL/binlog\nRow-level change capture\n1-5s latency"]
+        T2S1 -->|"DB WAL"| T2CB
+        T2S2 & T2S3 -->|"REST API"| T2CA
+    end
+
+    subgraph TIER3["🔴 Tier 3 — Snapshot Diff"]
+        direction LR
+        T3S1["Labour"]
+        T3S2["Excise"]
+        T3S3["Legacy [15-20+]"]
+        T3C["🔌 Snapshot Connector\n━━━━━━━━━━━━━━━━━━━━\nBulk API / Data export\nFull state comparison\nField-level diff engine\n1-15 min intervals"]
+        T3S1 & T3S2 & T3S3 -->|"bulk export"| T3C
+    end
+
+    UNIFORM["📦 Uniform RawChange Output\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nAll tiers produce IDENTICAL output:\n• entity_type, entity_id\n• changed_fields (field-level)\n• change_timestamp, capture_method\n• connector_id"]
+
+    T1C --> UNIFORM
+    T2CA --> UNIFORM
+    T2CB --> UNIFORM
+    T3C --> UNIFORM
+
+    KAFKA["📨 topic: raw-changes\n(partitioned by UBID)"]
+    UNIFORM --> KAFKA
+
+    style TIER1 fill:#0d3b2e,stroke:#2ecc71,color:#fff,stroke-width:3px
+    style TIER2 fill:#3d3100,stroke:#f1c40f,color:#fff,stroke-width:3px
+    style TIER3 fill:#3d1a00,stroke:#e74c3c,color:#fff,stroke-width:3px
+    style UNIFORM fill:#1a1a2e,stroke:#3498db,color:#fff,stroke-width:2px
+    style KAFKA fill:#145a32,stroke:#27ae60,color:#fff,stroke-width:2px
+    style T1C fill:#0d3b2e,stroke:#27ae60,color:#fff
+    style T2CA fill:#3d3100,stroke:#f39c12,color:#fff
+    style T2CB fill:#3d3100,stroke:#f39c12,color:#fff
+    style T3C fill:#3d1a00,stroke:#e67e22,color:#fff
+    style T1S1 fill:#1a5276,stroke:#2980b9,color:#fff
+    style T1S2 fill:#1a5276,stroke:#2980b9,color:#fff
+    style T1S3 fill:#1a5276,stroke:#2980b9,color:#fff
+    style T2S1 fill:#5e3c1a,stroke:#e67e22,color:#fff
+    style T2S2 fill:#5e3c1a,stroke:#e67e22,color:#fff
+    style T2S3 fill:#5e3c1a,stroke:#e67e22,color:#fff
+    style T3S1 fill:#5c1a1a,stroke:#d94a4a,color:#fff
+    style T3S2 fill:#5c1a1a,stroke:#d94a4a,color:#fff
+    style T3S3 fill:#5c1a1a,stroke:#d94a4a,color:#fff
+```
+
 **Connector Interface:**
 
 ```json
@@ -924,6 +989,61 @@ The Manual Review Console is a web application that presents reviewers with:
 3. **Reconciliation Queue:** Drift instances detected by the reconciliation engine that are ambiguous (e.g., the expected value and the actual value both differ from the last propagated value). The reviewer determines whether to re-propagate, accept the actual value, or escalate further.
 
 4. **Causal Context View:** For any item in any queue, the reviewer can view the full causal chain in the evidence graph — every event, translation, conflict, resolution, and write that led to the current state.
+
+**Manual Review Console Workflow:**
+
+The following diagram shows the complete lifecycle of a review item from its arrival in a queue through reviewer triage, decision-making, action execution, and evidence recording:
+
+```mermaid
+flowchart TB
+    subgraph QUEUES["📥 Incoming Review Items"]
+        direction LR
+        Q1["🔍 Quarantine Queue\n━━━━━━━━━━━━━━━━━━\nLow UBID confidence\n(score < 0.70)"]
+        Q2["⚖️ Conflict Queue\n━━━━━━━━━━━━━━━━━━\nLevel 4 escalation\n(no policy resolves)"]
+        Q3["🔄 Reconciliation Queue\n━━━━━━━━━━━━━━━━━━\nAmbiguous drift\n(expected ≠ actual ≠ last known)"]
+    end
+
+    TRIAGE["👤 Reviewer Triage\n━━━━━━━━━━━━━━━━━━━━━━\nSort by: priority, age, UBID\nView: event details, candidates,\nconfidence scores, full causal chain"]
+
+    Q1 & Q2 & Q3 --> TRIAGE
+
+    TRIAGE --> VIEW["📊 Causal Context View\n━━━━━━━━━━━━━━━━━━━━━━\nEvidence graph traversal\nfrom source event to current state\nAll intermediate decisions visible"]
+
+    VIEW --> DECIDE{"👤 Reviewer Decision"}
+
+    DECIDE -->|"Quarantine: Confirm UBID"| A1["✅ UBID Confirmed\nEvent re-enters pipeline\nwith HIGH_CONFIDENCE"]
+    DECIDE -->|"Quarantine: Assign different UBID"| A2["🔄 UBID Corrected\nCompensation + Replay\nworkflow triggered"]
+    DECIDE -->|"Quarantine: Create new UBID"| A3["🆕 New UBID Association\nUBID registry updated\nEvent proceeds"]
+    DECIDE -->|"Conflict: Select winner"| A4["⚖️ Winner Selected\nJustification recorded\nLoser value preserved in audit"]
+    DECIDE -->|"Drift: Re-propagate"| A5["🔄 Re-propagation Ordered\nSaga re-executed with\nexpected value"]
+    DECIDE -->|"Drift: Accept actual"| A6["✅ Actual Accepted\nNew canonical event created\nfrom actual value"]
+    DECIDE -->|"Escalate further"| A7["⬆️ Escalated\nRouted to supervisor\nwith reviewer notes"]
+
+    RECORD["📊 Evidence Graph Recording\n━━━━━━━━━━━━━━━━━━━━━━\nMANUAL_DECISION node created\nLinked to input events\nReviewer ID, timestamp,\njustification all recorded"]
+
+    A1 & A2 & A3 & A4 & A5 & A6 & A7 --> RECORD
+
+    TIMEOUT["⏰ Auto-Escalation\n━━━━━━━━━━━━━━━━━━\nItems not reviewed within\n48 hours auto-routed to\nsupervisor queue"]
+
+    TRIAGE -.->|"48h timeout"| TIMEOUT
+
+    style QUEUES fill:#1a1a2e,stroke:#4a90d9,color:#fff,stroke-width:2px
+    style Q1 fill:#5e3c1a,stroke:#e67e22,color:#fff
+    style Q2 fill:#3c1a5e,stroke:#9b59b6,color:#fff
+    style Q3 fill:#1a3c5e,stroke:#3498db,color:#fff
+    style TRIAGE fill:#2c3e50,stroke:#ecf0f1,color:#fff,stroke-width:2px
+    style VIEW fill:#1a5276,stroke:#2980b9,color:#fff
+    style DECIDE fill:#f39c12,stroke:#e67e22,color:#fff,stroke-width:3px
+    style RECORD fill:#0d3b2e,stroke:#1abc9c,color:#fff,stroke-width:2px
+    style TIMEOUT fill:#922b21,stroke:#e74c3c,color:#fff
+    style A1 fill:#27ae60,stroke:#1e8449,color:#fff
+    style A2 fill:#e67e22,stroke:#d35400,color:#fff
+    style A3 fill:#2980b9,stroke:#1a5276,color:#fff
+    style A4 fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style A5 fill:#e67e22,stroke:#d35400,color:#fff
+    style A6 fill:#27ae60,stroke:#1e8449,color:#fff
+    style A7 fill:#c0392b,stroke:#922b21,color:#fff
+```
 
 **Reviewer Decision Recording:**
 
@@ -2250,6 +2370,101 @@ flowchart TB
 | **Monitoring** | Prometheus + Grafana | Industry-standard metrics collection and visualisation. Rich alerting capabilities. | Datadog (cost), ELK (different purpose), CloudWatch (AWS-specific) |
 | **Secret Management** | HashiCorp Vault | Centralised credential storage with audit logging, automatic rotation, and fine-grained access control. | K8s Secrets (limited audit), AWS Secrets Manager (cloud-specific) |
 
+### Technology Stack Interaction Map
+
+The following diagram shows how each technology component interconnects at runtime, illustrating the data flow paths, communication protocols, and the role each technology plays in the processing pipeline:
+
+```mermaid
+graph TB
+    subgraph EXTERNAL["🌐 External Systems"]
+        SWS["🏛️ SWS Portal\n(webhook source)"]
+        DEPT_API["🏢 Department APIs\n(REST targets)"]
+        DEPT_DB["💾 Department DBs\n(CDC sources)"]
+    end
+
+    subgraph INGESTION["🔌 Ingestion"]
+        WH["Webhook\nListener"]
+        DEB["⚡ Debezium\nCDC Engine\n━━━━━━━━━━\nReads WAL/binlog\nZero-impact on source\nExactly-once semantics"]
+        POLL["🔄 API\nPoller"]
+    end
+
+    subgraph STREAMING["📨 Apache Kafka (Event Backbone)"]
+        direction LR
+        RAW["topic:\nraw-changes"]
+        CAN["topic:\ncanonical-events"]
+        RES["topic:\nresolved-events"]
+        CON["topic:\nconverged-events"]
+        AUD["topic:\naudit-entries"]
+        DLQ_T["topic:\ndead-letter-queue"]
+    end
+
+    subgraph PROCESSING["⚙️ Processing Pipeline (Kubernetes Pods)"]
+        EVB["📝 Event Builder"]
+        URE["🔍 UBID Resolver"]
+        CCE_P["⚖️ Conflict Engine"]
+        SMR["🗺️ Schema Mapper"]
+    end
+
+    subgraph ORCHESTRATION["⏱️ Temporal.io"]
+        TW["📋 Temporal Workers\n━━━━━━━━━━━━━━━━━━\nPropagationSaga\nCompensationSaga\nReplaySaga"]
+        TS["💾 Temporal Server\n━━━━━━━━━━━━━━━━━━\nWorkflow history\nTimer management\nSignal handling"]
+    end
+
+    subgraph STORAGE["💾 Persistent Storage"]
+        PG["🐘 PostgreSQL\n━━━━━━━━━━━━━━━━━━\nImmutable Event Log\nEvidence Graph (nodes+edges)\nSchema Mapping Registry\nReconciliation state"]
+        REDIS_S["🔑 Redis\n━━━━━━━━━━━━━━━━━━\nIdempotency Store\nConflict window cache\nRate limit counters"]
+    end
+
+    subgraph OBSERVABILITY["📊 Monitoring"]
+        PROM["📈 Prometheus\nMetrics collection"]
+        GRAF["📊 Grafana\nDashboards + Alerts"]
+        VAULT["🔐 HashiCorp Vault\nCredential management"]
+    end
+
+    SWS -->|"HTTP POST"| WH
+    DEPT_DB -->|"WAL stream"| DEB
+    DEPT_API -->|"HTTP GET"| POLL
+
+    WH --> RAW
+    DEB --> RAW
+    POLL --> RAW
+
+    RAW --> EVB --> CAN
+    CAN --> URE --> RES
+    RES --> CCE_P --> CON
+    CCE_P --> SMR
+
+    CON --> TW
+    TW <--> TS
+    TW -->|"HTTP PUT/POST"| DEPT_API
+    TW -->|"HTTP PATCH"| SWS
+
+    EVB --> AUD
+    URE --> AUD
+    CCE_P --> AUD
+    TW --> AUD
+    AUD --> PG
+
+    TW -->|"SET NX"| REDIS_S
+    CCE_P -->|"conflict window"| REDIS_S
+    EVB -->|"INSERT"| PG
+    TW -->|"DLQ entries"| DLQ_T
+
+    PROCESSING -->|"metrics"| PROM
+    TW -->|"metrics"| PROM
+    PROM --> GRAF
+    VAULT -->|"credentials"| INGESTION
+    VAULT -->|"credentials"| TW
+
+    style EXTERNAL fill:#1a1a2e,stroke:#4a90d9,color:#fff,stroke-width:2px
+    style INGESTION fill:#5e1a1a,stroke:#e74c3c,color:#fff,stroke-width:2px
+    style STREAMING fill:#145a32,stroke:#27ae60,color:#fff,stroke-width:2px
+    style PROCESSING fill:#1a3c5e,stroke:#3498db,color:#fff,stroke-width:2px
+    style ORCHESTRATION fill:#1a5276,stroke:#2980b9,color:#fff,stroke-width:2px
+    style STORAGE fill:#0d3b2e,stroke:#1abc9c,color:#fff,stroke-width:2px
+    style OBSERVABILITY fill:#3c1a5e,stroke:#9b59b6,color:#fff,stroke-width:2px
+```
+
 ---
 
 ## End-to-End Flows
@@ -2347,6 +2562,49 @@ sequenceDiagram
 | 9 | Saga Orchestrator | Writes to SWS API: `PATCH /api/registrations/UBID-847/signatories {add: ["Priya Sharma"], remove: ["Rajesh Kumar"]}`. Response: 200 OK. | Write confirmed |
 | 10 | Evidence Graph | Full chain recorded: CDC capture → event → resolution → no conflict → mapping → write → confirmation. | Audit trail complete |
 
+**Sequence Diagram:**
+
+```mermaid
+sequenceDiagram
+    actor OFF as 👤 Factories Officer
+    participant FAC as 🏭 Factories System
+    participant FACDB as 💾 Factories DB
+    participant DEB as ⚡ Debezium CDC
+    participant EVT as 📝 Event Builder
+    participant UBID as 🔍 UBID Engine
+    participant CCE as ⚖️ Conflict Engine
+    participant MAP as 🗺️ Schema Mapping
+    participant SAGA as ⚙️ Saga Orchestrator
+    participant SWS as 🏛️ SWS Portal API
+    participant EG as 📊 Evidence Graph
+
+    OFF->>FAC: Update authorised signatory\n"Rajesh Kumar" → "Priya Sharma"
+    FAC->>FACDB: UPDATE business_registrations\nSET signatory_name = 'Priya Sharma'
+    FACDB-->>DEB: WAL entry captured\n(row-level change)
+
+    DEB->>EVT: RawChange published\n{signatory_name: "Rajesh Kumar" → "Priya Sharma"}
+    Note over DEB,EG: Change captured via CDC - zero impact on Factories system
+
+    EVT->>EVT: Build canonical event\ncrdt_type = OR_SET (SWS stores signatories as set)\nlamport_ts = 201
+    EVT->>UBID: topic:canonical-events
+
+    UBID->>UBID: Resolve UBID from Factories entity ID\nCross-reference with UBID registry\nConfidence = 0.96 → HIGH_CONFIDENCE
+    UBID->>CCE: topic:resolved-events
+
+    CCE->>CCE: No in-flight SWS update for\nUBID-847.authorised_signatories\n→ NO CONFLICT
+    CCE->>MAP: topic:converged-events
+
+    MAP->>MAP: Transform: signatory_name (string) →\nauthorised_signatories (OR-Set)\nOperations: [ADD("Priya Sharma"), REMOVE("Rajesh Kumar")]
+    MAP->>SAGA: Propagation command for SWS
+
+    SAGA->>SWS: PATCH /api/registrations/UBID-847/signatories\n{add: ["Priya Sharma"], remove: ["Rajesh Kumar"]}
+    SWS-->>SAGA: 200 OK
+    SAGA->>EG: WRITE_CONFIRMATION (SWS)
+
+    SAGA->>EG: Saga complete — all steps SUCCESS
+    Note over EG: Causal chain recorded:\nCDC_CAPTURE → CANONICAL_EVENT → UBID_RESOLUTION\n→ NO_CONFLICT → SCHEMA_TRANSLATION (OR-Set ops)\n→ PROPAGATION_WRITE → WRITE_CONFIRMATION
+```
+
 ---
 
 ### Flow 3: Conflict Scenario — Simultaneous Address Updates
@@ -2369,6 +2627,53 @@ sequenceDiagram
 | 9 | Manual Review Console | The officer's value was overridden. An **informational notification** is sent to the Shop Establishment dashboard: "Your update to registered_address for UBID-847 was superseded by an SWS update. If you believe the SWS value is incorrect, please file a correction request." | Officer notified |
 
 **Key insight:** This scenario involves a tension between CRDT determinism and domain authority. The four-level ladder allows the system to apply mathematical correctness first and then overlay governance policies. The evidence graph records exactly which rule was applied and why, enabling any future reviewer to understand and potentially override the decision.
+
+**Sequence Diagram:**
+
+```mermaid
+sequenceDiagram
+    actor BIZ as 🏢 Business
+    actor OFF as 👤 Shop Estb. Officer
+    participant SWS as 🏛️ SWS Portal
+    participant SHOP as 🏪 Shop Estb. System
+    participant CONN_S as 🔌 SWS Connector
+    participant CONN_SE as 🔌 Shop Connector
+    participant EVT as 📝 Event Builder
+    participant CCE as ⚖️ Conflict Engine
+    participant EG as 📊 Evidence Graph
+    participant SAGA as ⚙️ Saga Orchestrator
+    participant MRC as 👤 Notification
+
+    Note over BIZ,MRC: ⚡ Two updates to the same field within 2 seconds
+
+    BIZ->>SWS: Update address to\n"123 MG Road" (10:04:23 AM)
+    OFF->>SHOP: Correct address to\n"456 Brigade Road" (10:04:25 AM)\nbased on field verification
+
+    par Parallel Change Detection
+        SWS-->>CONN_S: Webhook (immediate)
+        CONN_S->>EVT: evt-A: registered_address\nlamport_ts = 300\nvalue = "123 MG Road"
+    and
+        SHOP-->>CONN_SE: Polling (5s later)
+        CONN_SE->>EVT: evt-B: registered_address\nlamport_ts = 301\nvalue = "456 Brigade Road"
+    end
+
+    EVT->>CCE: Both events for UBID-847.registered_address
+
+    rect rgb(80, 20, 20)
+        Note over CCE: ⚡ CONFLICT DETECTED\n|lamport_ts(A) - lamport_ts(B)| ≤ 30s window
+        CCE->>CCE: Level 1 — CRDT (LWW_REGISTER)\nlamport_ts: 300 vs 301\n→ evt-B wins (higher ts)\nValue: "456 Brigade Road"
+        CCE->>CCE: Level 2 — Source Priority Check\nregistered_address policy:\nSWS = priority 1, Shop Estb. = priority 3\n⚠️ OVERRIDE: SWS is authoritative\nValue: "123 MG Road"
+    end
+
+    CCE->>EG: CONFLICT_RESOLUTION recorded\nLevel 2 override of Level 1\nWinner: evt-A (SWS) "123 MG Road"\nLoser: evt-B (Shop) "456 Brigade Road"\nPolicy: source-priority-v2.0.0
+
+    SAGA->>SHOP: PUT: shop_address = "123 MG Road"
+    SHOP-->>SAGA: 200 OK
+
+    SAGA->>MRC: ℹ️ Informational notification to\nShop Estb. dashboard:\n"Your update was superseded by SWS update.\nFile correction request if SWS value is incorrect."
+
+    Note over EG: Full conflict audit trail preserved:\nBoth values, both sources, resolution level,\npolicy version, override reason — all queryable
+```
 
 ---
 
@@ -2395,6 +2700,69 @@ sequenceDiagram
 | 13 | Reconciliation Engine | Next scheduled run verifies: UBID-847.employee_count = 45 (correct — restored). UBID-923.employee_count = 52 (correct — newly set). Both MATCH. | Compensation verified |
 
 **Key insight:** This scenario demonstrates why identity uncertainty must be modelled explicitly. The system allowed propagation to proceed under PROBATION (reducing operational delay) while ensuring that the incorrect assignment could be fully reversed when detected. No data was permanently corrupted, and the complete decision chain is auditable.
+
+**Sequence Diagram:**
+
+```mermaid
+sequenceDiagram
+    participant LAB as 🏗️ Labour System
+    participant SNAP as 🔌 Snapshot Connector
+    participant UBID as 🔍 UBID Engine
+    participant SAGA as ⚙️ Saga Orchestrator
+    participant SWS as 🏛️ SWS Portal
+    participant EG as 📊 Evidence Graph
+    participant MRC as 👤 Manual Review Console
+    participant COMP as ↩️ Compensation Saga
+    participant RECON as 🔄 Reconciliation
+
+    Note over LAB,RECON: Phase 1: Initial Propagation (Day 1)
+
+    SNAP->>SNAP: Snapshot diff detected:\nLAB-9923.employee_count: 45 → 52
+    SNAP->>UBID: RawChange for entity LAB-9923
+
+    rect rgb(80, 60, 0)
+        UBID->>UBID: Fuzzy match:\nName similarity: 85%\nAddress similarity: 78%\nReg. date: MISMATCH\nScore: 0.82 → PROBATION
+        Note over UBID: ⚠️ UBID-847 assigned\nwith ubid_verified = false
+    end
+
+    UBID->>SAGA: evt-P: employee_count=52\nUBID=847, confidence=PROBATION
+    SAGA->>SWS: PATCH UBID-847\n{employee_count: 52}
+    SWS-->>SAGA: 200 OK
+    SAGA->>EG: Write recorded with PROBATION flag
+
+    Note over EG: ⚠️ Background verification task queued
+
+    Note over LAB,RECON: Phase 2: Manual Review (Day 3)
+
+    MRC->>MRC: Reviewer examines UBID-847 vs LAB-9923\nChecks registration certificate\nFinds: LAB-9923 = UBID-923 (different business!)
+    MRC->>EG: MANUAL_DECISION recorded\n"LAB-9923 reg cert shows UBID-923, not 847"
+
+    rect rgb(80, 20, 20)
+        Note over MRC,COMP: 🚨 UBID CORRECTION TRIGGERED
+        MRC->>COMP: CompensationRequest:\noriginal_ubid = UBID-847\ncorrected_ubid = UBID-923
+    end
+
+    Note over LAB,RECON: Phase 3: Compensation + Replay
+
+    COMP->>SWS: PATCH UBID-847\n{employee_count: 45}\n(restore original value)
+    SWS-->>COMP: 200 OK — restored
+    COMP->>EG: COMPENSATION recorded\nUBID-847.employee_count restored to 45
+
+    COMP->>SAGA: REPLAY evt-P with corrected UBID-923
+    SAGA->>SWS: PATCH UBID-923\n{employee_count: 52}
+    SWS-->>SAGA: 200 OK
+    SAGA->>EG: New PROPAGATION_WRITE for UBID-923
+
+    Note over LAB,RECON: Phase 4: Verification
+
+    RECON->>SWS: Query UBID-847.employee_count
+    SWS-->>RECON: 45 ✅ (restored)
+    RECON->>SWS: Query UBID-923.employee_count
+    SWS-->>RECON: 52 ✅ (correct)
+    RECON->>EG: Both MATCH — compensation verified
+
+    Note over EG: Complete audit chain:\nevt-P → PROBATION → write(847) → manual_review\n→ UBID_CORRECTION → compensation(restore 847)\n→ replay(923) → write(923) → MATCH ✅
+```
 
 ---
 
@@ -2561,6 +2929,57 @@ The Factories department updates their API, changing the field name from `factor
 | End-to-end (Tier 1 system) | < 10 seconds | All above |
 | End-to-end (Tier 3 system) | < 20 minutes | Snapshot interval + processing pipeline |
 
+### Monitoring & Observability Architecture
+
+The following diagram shows the complete observability strategy — what metrics are collected from each component, how alerts are triggered, and how the operations team gains visibility into system health:
+
+```mermaid
+graph TB
+    subgraph METRICS["📈 Metrics Collection (Prometheus)"]
+        direction TB
+        M1["🔌 Connector Metrics\n━━━━━━━━━━━━━━━━━━━━\n• events_captured_total (by connector)\n• capture_latency_ms (p50, p95, p99)\n• heartbeat_age_seconds\n• snapshot_diff_duration_ms\n• connector_restarts_total"]
+        M2["📨 Kafka Metrics\n━━━━━━━━━━━━━━━━━━━━\n• consumer_lag (by topic, partition)\n• messages_in_per_sec\n• messages_out_per_sec\n• partition_count\n• under_replicated_partitions"]
+        M3["⚙️ Pipeline Metrics\n━━━━━━━━━━━━━━━━━━━━\n• events_processed_total (by layer)\n• processing_latency_ms (by layer)\n• conflicts_detected_total\n• conflict_resolution_level (L1-L4)\n• ubid_confidence_distribution"]
+        M4["⏱️ Saga Metrics\n━━━━━━━━━━━━━━━━━━━━\n• sagas_started_total\n• saga_step_duration_ms\n• saga_success_rate\n• retry_count_total\n• dlq_entries_total\n• compensation_triggered_total"]
+        M5["📊 Governance Metrics\n━━━━━━━━━━━━━━━━━━━━\n• evidence_graph_nodes_total\n• reconciliation_runs_total\n• drift_detected_total (by type)\n• review_queue_depth (by queue)\n• review_decision_latency_hours\n• auto_escalation_count"]
+    end
+
+    subgraph ALERTS["🔔 Alert Rules"]
+        direction TB
+        A_CRIT["🔴 CRITICAL\n━━━━━━━━━━━━━━━━━━━━\n• Kafka under-replicated partitions > 0\n• Consumer lag > 10,000 (any topic)\n• Compensation failure\n• Redis unavailable\n• Connector heartbeat missing > 5min"]
+        A_WARN["🟡 WARNING\n━━━━━━━━━━━━━━━━━━━━\n• DLQ depth > 50 events\n• Review queue > 100 items\n• Event processing latency p99 > 30s\n• Schema drift detected\n• Reconciliation drift rate > 5%"]
+        A_INFO["🔵 INFO\n━━━━━━━━━━━━━━━━━━━━\n• New connector registered\n• Schema mapping promoted\n• Bulk reconciliation completed\n• Auto-escalation triggered"]
+    end
+
+    subgraph DASHBOARDS["📊 Grafana Dashboards"]
+        direction TB
+        D1["🏠 System Overview\nEvent throughput, latency\nconflict rate, DLQ depth"]
+        D2["🔌 Connector Health\nPer-connector status\ncapture rates, heartbeats"]
+        D3["⚖️ Conflict Analytics\nResolution level distribution\nL4 escalation trends"]
+        D4["🔍 UBID Analytics\nConfidence distribution\nquarantine rate, correction rate"]
+        D5["👤 Review Console\nQueue depth, decision time\nauto-escalation rate"]
+    end
+
+    M1 & M2 & M3 & M4 & M5 --> ALERTS
+    ALERTS --> DASHBOARDS
+    A_CRIT -->|"PagerDuty"| OPS["📟 Ops Team\nOn-call engineer"]
+    A_WARN -->|"Slack"| TEAM["💬 Fabric Team\nSlack channel"]
+
+    style METRICS fill:#1a1a2e,stroke:#3498db,color:#fff,stroke-width:2px
+    style ALERTS fill:#2c1a00,stroke:#e67e22,color:#fff,stroke-width:2px
+    style DASHBOARDS fill:#0d3b2e,stroke:#1abc9c,color:#fff,stroke-width:2px
+    style M1 fill:#1a3c5e,stroke:#3498db,color:#fff
+    style M2 fill:#145a32,stroke:#27ae60,color:#fff
+    style M3 fill:#3c1a5e,stroke:#9b59b6,color:#fff
+    style M4 fill:#1a5276,stroke:#2980b9,color:#fff
+    style M5 fill:#0d3b2e,stroke:#1abc9c,color:#fff
+    style A_CRIT fill:#922b21,stroke:#e74c3c,color:#fff
+    style A_WARN fill:#7d6608,stroke:#f1c40f,color:#fff
+    style A_INFO fill:#1a5276,stroke:#2980b9,color:#fff
+    style OPS fill:#922b21,stroke:#e74c3c,color:#fff
+    style TEAM fill:#7d6608,stroke:#f1c40f,color:#fff
+```
+
 ---
 
 ## Deployment Strategy
@@ -2638,6 +3057,58 @@ graph TB
 - Onboard department systems one at a time
 - Each new system: connector + schema mapping + shadow mode + promotion
 - Monitor and tune per-system configuration
+
+### Deployment Gantt Chart
+
+```mermaid
+gantt
+    title UBID Fabric Deployment Timeline
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+
+    section Infrastructure
+    Kubernetes cluster setup           :infra1, 2026-05-01, 2d
+    Kafka (3 brokers) deploy           :infra2, after infra1, 1d
+    PostgreSQL + Redis deploy          :infra3, after infra1, 1d
+    Temporal.io deploy                 :infra4, after infra2, 1d
+    Monitoring (Prometheus+Grafana)    :infra5, after infra3, 1d
+    Vault + secrets configuration      :infra6, after infra4, 1d
+
+    section Connectors
+    SWS Webhook Connector              :conn1, after infra6, 2d
+    Factories CDC Connector            :conn2, after conn1, 2d
+    Shop Estb. Polling Connector       :conn3, after conn2, 2d
+
+    section Pipeline
+    Canonical Event Builder            :pipe1, after conn1, 2d
+    UBID Resolution Engine             :pipe2, after pipe1, 2d
+    Conflict Convergence Engine        :pipe3, after pipe2, 2d
+    Schema Mapping Registry            :pipe4, after pipe2, 2d
+    Idempotency Store integration      :pipe5, after pipe3, 1d
+
+    section Execution
+    PropagationSaga (Temporal)         :exec1, after pipe5, 2d
+    CompensationSaga                   :exec2, after exec1, 1d
+    ReplaySaga                         :exec3, after exec2, 1d
+    DLQ Consumer                       :exec4, after exec3, 1d
+
+    section Governance
+    Evidence Graph Store               :gov1, after pipe3, 2d
+    Reconciliation Engine              :gov2, after gov1, 2d
+    Manual Review Console (Web)        :gov3, after gov2, 3d
+
+    section Validation
+    E2E Flow 1 test (Address update)   :test1, after exec4, 1d
+    E2E Flow 2 test (Signatory)        :test2, after test1, 1d
+    E2E Flow 3 test (Conflict)         :test3, after test2, 1d
+    E2E Flow 4 test (UBID correction)  :test4, after test3, 1d
+    Full demo + jury prep              :demo, after test4, 2d
+
+    section Onboarding
+    Labour Dept (Snapshot Connector)   :onb1, after demo, 3d
+    Comm. Taxes (Polling Connector)    :onb2, after onb1, 3d
+    Progressive rollout (remaining)    :onb3, after onb2, 14d
+```
 
 ---
 
