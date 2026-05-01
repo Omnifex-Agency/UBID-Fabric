@@ -1,0 +1,68 @@
+version: "3.9"
+
+# UBID Fabric — Local Development Infrastructure (FREE)
+# Only 2 containers: PostgreSQL + Redis. That's all you need.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ubid-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ubid_fabric
+      POSTGRES_PASSWORD: ubid_dev_2026
+      POSTGRES_DB: ubid_fabric
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ubid_fabric"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ubid-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  api:
+    build: .
+    container_name: ubid-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://ubid_fabric:ubid_dev_2026@postgres:5432/ubid_fabric
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------
+  # OPTIONAL: Self-Hosted AI (Ollama)
+  # Uncomment this to run Llama3/Mistral locally.
+  # Requires 8GB+ RAM. 
+  # ---------------------------------------------------------
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ubid-ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+
+volumes:
+  postgres-data:
+  redis-data:
+  ollama-data:

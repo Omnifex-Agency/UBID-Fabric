@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UBID Fabric | Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    
+    <div class="app-container">
+        <header class="glass-panel main-header">
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <h1>UBID Fabric <span class="tag">PROTOTYPE</span></h1>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="active">Dashboard</a>
+                <a href="#">Evidence Graph</a>
+                <a href="#">Dead Letter Queue</a>
+            </div>
+            <div class="status-indicator">
+                <div class="dot active"></div>
+                <span>System Online</span>
+            </div>
+        </header>
+
+        <main>
+            <div class="stats-grid" id="statsGrid">
+                <!-- Populated by JS -->
+                <div class="stat-card glass-panel skeleton"></div>
+                <div class="stat-card glass-panel skeleton"></div>
+                <div class="stat-card glass-panel skeleton"></div>
+                <div class="stat-card glass-panel skeleton"></div>
+            </div>
+
+            <section class="content-section">
+                <div class="section-header">
+                    <h2>Recent Canonical Events</h2>
+                    <button class="btn btn-primary" onclick="fetchEvents()">Refresh</button>
+                </div>
+                <div class="glass-panel table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Event ID (SHA-256)</th>
+                                <th>UBID</th>
+                                <th>Source</th>
+                                <th>Clock</th>
+                                <th>Timestamp</th>
+                                <th>Fields Changed</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventsTableBody">
+                            <tr><td colspan="6" class="text-center text-muted">Loading events...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
