@@ -202,6 +202,49 @@ async def trace_causes(ubid: str, node_id: str):
     return {"node_id": node_id, "chain_length": len(chain), "chain": chain}
 
 
+@app.get("/api/evidence")
+async def get_all_evidence(limit: int = 50):
+    """Get most recent evidence nodes."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM evidence_nodes ORDER BY timestamp DESC LIMIT %s",
+                (limit,)
+            )
+            return cur.fetchall()
+
+
+@app.get("/api/dlq")
+async def list_dlq(limit: int = 50):
+    """List entries in the Dead Letter Queue."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM dead_letter_queue ORDER BY created_at DESC LIMIT %s",
+                (limit,)
+            )
+            return cur.fetchall()
+
+
+@app.post("/api/dlq/{dlq_id}/retry")
+async def retry_dlq(dlq_id: int):
+    """Retry a failed propagation from the DLQ."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM dead_letter_queue WHERE dlq_id = %s", (dlq_id,))
+            entry = cur.fetchone()
+            if not entry:
+                raise HTTPException(status_code=404, detail="DLQ entry not found")
+            
+            # Update status to RETRYING
+            cur.execute("UPDATE dead_letter_queue SET status = 'RETRYING' WHERE dlq_id = %s", (dlq_id,))
+            conn.commit()
+            
+            # In a real system, this would trigger a background task. 
+            # For the prototype, we just mark it as handled.
+            return {"status": "retry_initiated", "dlq_id": dlq_id}
+
+
 # ═══════════════════════════════════════════════════════════════
 # AI Intelligence Endpoints
 # ═══════════════════════════════════════════════════════════════
@@ -227,6 +270,170 @@ async def suggest_mapping(payload: AIMappingPayload):
         "model": settings.ai_model,
         "suggestion": suggestion
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Dynamic Connector Management Endpoints
+# ═══════════════════════════════════════════════════════════════
+
+from ubid_fabric.models import Connector, ConnectorConfig, TargetSystem
+from ubid_fabric.db import get_pg_connection
+
+from fastapi.encoders import jsonable_encoder
+
+@app.get("/api/connectors")
+async def list_connectors():
+    """List all registered connectors."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM connectors ORDER BY created_at DESC")
+            return jsonable_encoder(cur.fetchall())
+
+@app.post("/api/connectors")
+async def create_connector(connector: Connector):
+    """Register a new custom connector."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO connectors (id, name, system_type, connector_type, config, is_active, last_status, success_rate)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (
+                    str(connector.id),
+                    connector.name,
+                    connector.system_type,
+                    connector.connector_type,
+                    connector.config.model_dump_json(),
+                    connector.is_active,
+                    connector.last_status,
+                    connector.success_rate
+                )
+            )
+            new_row = cur.fetchone()
+            conn.commit()
+            return new_row
+
+@app.post("/api/connectors/test")
+async def test_connector(config: ConnectorConfig):
+    """Test a connector configuration by fetching sample data."""
+    if not config.url:
+        return {"status": "error", "message": "URL is required for testing"}
+    
+    import httpx
+    async with httpx.AsyncClient() as client:
+        try:
+            headers = {}
+            if config.auth_header:
+                headers["Authorization"] = config.auth_header
+            
+            response = await client.request(config.method, config.url, headers=headers, timeout=10.0)
+            return {
+                "status": "success" if response.is_success else "error",
+                "status_code": response.status_code,
+                "sample_data": response.json() if "application/json" in response.headers.get("content-type", "") else response.text[:500]
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+@app.post("/api/connectors/auto-map")
+async def auto_map_fields(payload: dict):
+    """Use AI to suggest field mappings from a source sample to the canonical schema."""
+    from ubid_fabric.ai_service import AIService
+    ai = AIService()
+    
+    source_sample = payload.get("source_sample", {})
+    # Canonical schema hint
+    canonical_schema = {
+        "business_name": "The legal name of the business entity",
+        "registered_address": "The primary physical location of the business",
+        "entity_id": "The system-specific identifier for the entity",
+        "entity_type": "The type of business (e.g., FACTORY, SHOP, TRADING)",
+        "registration_date": "When the business was officially registered",
+        "owner_name": "Name of the primary proprietor or director",
+        "gstin": "GST Identification Number if available"
+    }
+    
+    suggestion = await ai.get_mapping_suggestion(source_sample, canonical_schema)
+    return {"suggestion": suggestion}
+
+@app.delete("/api/connectors/{connector_id}")
+async def delete_connector(connector_id: str):
+    """Remove a connector."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM connectors WHERE id = %s", (connector_id,))
+            conn.commit()
+            return {"status": "deleted"}
+
+@app.patch("/api/connectors/{connector_id}/toggle")
+async def toggle_connector(connector_id: str):
+    """Enable or disable a connector."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE connectors SET is_active = NOT is_active WHERE id = %s RETURNING is_active",
+                (connector_id,)
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return {"id": connector_id, "is_active": row["is_active"]}
+
+# --- Target Systems (Outbound) ---
+
+@app.get("/api/targets")
+async def list_targets():
+    """List all registered target systems for propagation."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM target_systems ORDER BY created_at DESC")
+            return jsonable_encoder(cur.fetchall())
+
+@app.post("/api/targets")
+async def create_target(target: TargetSystem):
+    """Register a new target system."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            import json
+            cur.execute(
+                """
+                INSERT INTO target_systems (id, name, system_type, base_url, auth_header, config, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (
+                    str(target.id),
+                    target.name,
+                    target.system_type,
+                    target.base_url,
+                    target.auth_header,
+                    json.dumps(target.config),
+                    target.is_active
+                )
+            )
+            new_row = cur.fetchone()
+            conn.commit()
+            return new_row
+
+@app.patch("/api/targets/{target_id}/toggle")
+async def toggle_target(target_id: str):
+    """Enable or disable a target system."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE target_systems SET is_active = NOT is_active WHERE id = %s RETURNING is_active", (target_id,))
+            row = cur.fetchone()
+            conn.commit()
+            return {"id": target_id, "is_active": row["is_active"]}
+
+@app.delete("/api/targets/{target_id}")
+async def delete_target(target_id: str):
+    """Remove a target system."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM target_systems WHERE id = %s", (target_id,))
+            conn.commit()
+            return {"status": "deleted"}
 
 
 # ═══════════════════════════════════════════════════════════════

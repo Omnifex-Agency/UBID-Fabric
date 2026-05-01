@@ -155,3 +155,56 @@ class MockShopEstablishmentWriter(TargetWriter):
             )
             resp.raise_for_status()
             return resp.json()
+
+
+class DynamicTargetWriter(TargetWriter):
+    """
+    A target writer that uses a dynamic configuration (URL, Auth, Mapping)
+    from the database to perform the write.
+    """
+
+    def __init__(self, target_sys: Any, evidence: EvidenceGraph):
+        super().__init__(
+            system_name=target_sys["system_type"],
+            base_url=target_sys["base_url"],
+            evidence=evidence,
+        )
+        self.auth_header = target_sys.get("auth_header")
+        self.config = target_sys.get("config", {})
+        if isinstance(self.config, str):
+            import json
+            self.config = json.loads(self.config)
+
+    async def _do_write(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # Apply field mappings if any
+        mapped_payload = payload.copy()
+        field_mappings = self.config.get("field_mappings", {})
+        if field_mappings:
+            new_payload = {}
+            for source, target in field_mappings.items():
+                if source in payload:
+                    new_payload[target] = payload[source]
+            # Include UBID and EventID always
+            new_payload["ubid"] = payload.get("ubid")
+            new_payload["event_id"] = payload.get("event_id")
+            mapped_payload = new_payload
+
+        async with httpx.AsyncClient() as client:
+            headers = {}
+            if self.auth_header:
+                headers["Authorization"] = self.auth_header
+            
+            method = self.config.get("method", "POST")
+            url = self.base_url
+            if not url.startswith("http"):
+                url = f"http://{url}"
+            
+            resp = await client.request(
+                method,
+                url,
+                json=mapped_payload,
+                headers=headers,
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            return resp.json()

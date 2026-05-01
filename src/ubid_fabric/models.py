@@ -120,6 +120,47 @@ class RawChange(BaseModel):
     capture_timestamp: datetime = Field(default_factory=datetime.now)
 
 
+# ─── Dynamic Connectors ──────────────────────────────────────
+
+class ConnectorConfig(BaseModel):
+    """Configuration for a dynamic connector."""
+    url: str | None = None
+    interval_seconds: int = 60
+    auth_header: str | None = None
+    api_key: str | None = None
+    webhook_secret: str | None = None
+    method: str = "GET"
+    payload_template: dict[str, Any] | None = None
+    mcp_endpoint: str | None = None # For MCP-like protocol support
+    field_mappings: dict[str, str] = {} # {source_field: canonical_field}
+
+class Connector(BaseModel):
+    """A registered connector in the fabric."""
+    id: UUID = Field(default_factory=uuid4)
+    name: str
+    system_type: str
+    connector_type: CaptureMethod
+    config: ConnectorConfig
+    is_active: bool = True
+    last_run: datetime | None = None
+    last_status: str = "PENDING" # SUCCESS, FAILED, PENDING
+    success_rate: float = 100.0
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+class TargetSystem(BaseModel):
+    """A registered target system for propagation (sending)."""
+    id: UUID = Field(default_factory=uuid4)
+    name: str
+    system_type: str
+    base_url: str
+    auth_header: str | None = None
+    config: dict[str, Any] = {} # { method, payload_template, field_mappings }
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
 # ═══════════════════════════════════════════════════════════════
 # L2 — Event Layer
 # ═══════════════════════════════════════════════════════════════

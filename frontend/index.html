@@ -20,9 +20,10 @@
                 <h1>UBID Fabric <span class="tag">PROTOTYPE</span></h1>
             </div>
             <div class="nav-links">
-                <a href="#" class="active">Dashboard</a>
-                <a href="#">Evidence Graph</a>
-                <a href="#">Dead Letter Queue</a>
+                <a href="#" class="active" onclick="showTab('dashboard')">Dashboard</a>
+                <a href="#" onclick="showTab('hub')">Interoperability Hub</a>
+                <a href="#" onclick="showTab('evidence')">Evidence Graph</a>
+                <a href="#" onclick="showTab('dlq')">Dead Letter Queue</a>
             </div>
             <div class="status-indicator">
                 <div class="dot active"></div>
@@ -31,38 +32,261 @@
         </header>
 
         <main>
-            <div class="stats-grid" id="statsGrid">
-                <!-- Populated by JS -->
-                <div class="stat-card glass-panel skeleton"></div>
-                <div class="stat-card glass-panel skeleton"></div>
-                <div class="stat-card glass-panel skeleton"></div>
-                <div class="stat-card glass-panel skeleton"></div>
+            <!-- Dashboard Tab -->
+            <div id="dashboardTab">
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Populated by JS -->
+                    <div class="stat-card glass-panel skeleton"></div>
+                    <div class="stat-card glass-panel skeleton"></div>
+                    <div class="stat-card glass-panel skeleton"></div>
+                    <div class="stat-card glass-panel skeleton"></div>
+                </div>
+
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Recent Canonical Events</h2>
+                        <button class="btn btn-primary" onclick="fetchEvents()">Refresh</button>
+                    </div>
+                    <div class="glass-panel table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Event ID (SHA-256)</th>
+                                    <th>UBID</th>
+                                    <th>Source</th>
+                                    <th>Clock</th>
+                                    <th>Timestamp</th>
+                                    <th>Fields Changed</th>
+                                </tr>
+                            </thead>
+                            <tbody id="eventsTableBody">
+                                <tr><td colspan="6" class="text-center text-muted">Loading events...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
 
-            <section class="content-section">
-                <div class="section-header">
-                    <h2>Recent Canonical Events</h2>
-                    <button class="btn btn-primary" onclick="fetchEvents()">Refresh</button>
+            <!-- Interoperability Hub Tab -->
+            <div id="hubTab" style="display: none;">
+                <div class="hub-layout">
+                    <!-- Left: Ingestion -->
+                    <section class="hub-column">
+                        <div class="section-header">
+                            <div>
+                                <h2>Ingestion Sources</h2>
+                                <p class="text-muted">Incoming data from departments</p>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="showAddConnectorModal()">+ Add Source</button>
+                        </div>
+                        <div class="hub-grid" id="connectorsGrid">
+                            <!-- Populated by JS -->
+                        </div>
+                    </section>
+
+                    <!-- Center: Pipeline Visualization (Optional decorative / status) -->
+                    <div class="hub-pipeline-visual">
+                        <div class="pipeline-flow">
+                            <div class="flow-line"></div>
+                            <div class="fabric-core-node">
+                                <div class="core-icon"></div>
+                                <span>UBID CORE</span>
+                            </div>
+                            <div class="flow-line"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Propagation -->
+                    <section class="hub-column">
+                        <div class="section-header">
+                            <div>
+                                <h2>Propagation Targets</h2>
+                                <p class="text-muted">Outgoing data to departments</p>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="showAddTargetModal()">+ Add Target</button>
+                        </div>
+                        <div class="hub-grid" id="targetsGrid">
+                            <!-- Populated by JS -->
+                        </div>
+                    </section>
                 </div>
-                <div class="glass-panel table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Event ID (SHA-256)</th>
-                                <th>UBID</th>
-                                <th>Source</th>
-                                <th>Clock</th>
-                                <th>Timestamp</th>
-                                <th>Fields Changed</th>
-                            </tr>
-                        </thead>
-                        <tbody id="eventsTableBody">
-                            <tr><td colspan="6" class="text-center text-muted">Loading events...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            </div>
+
+            <!-- Evidence Graph Tab -->
+            <div id="evidenceTab" style="display: none;">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Causal Evidence Graph</h2>
+                        <p class="text-muted">Trace the immutable chain of custody for any record.</p>
+                    </div>
+                    <div class="glass-panel table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Node Type</th>
+                                    <th>UBID</th>
+                                    <th>Event Reference</th>
+                                    <th>Timestamp</th>
+                                    <th>Causal Payload</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evidenceTableBody">
+                                <tr><td colspan="5" class="text-center text-muted">No evidence nodes recorded.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Dead Letter Queue Tab -->
+            <div id="dlqTab" style="display: none;">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Dead Letter Queue (DLQ)</h2>
+                        <p class="text-muted">Failed propagations requiring manual review or retry.</p>
+                    </div>
+                    <div class="glass-panel table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Event ID</th>
+                                    <th>UBID</th>
+                                    <th>Target System</th>
+                                    <th>Status</th>
+                                    <th>Created At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dlqTableBody">
+                                <tr><td colspan="6" class="text-center text-muted">DLQ is currently empty.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
         </main>
+
+        <!-- Modals -->
+        <div id="connectorModal" class="modal">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h3>Setup Advanced Connector</h3>
+                    <div class="modal-badge">AI ASSISTED</div>
+                </div>
+                <form id="connectorForm">
+                    <div class="form-group">
+                        <label>Connector Name</label>
+                        <input type="text" id="connName" placeholder="e.g. Labour Dept Webhook" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>System Type</label>
+                            <input type="text" id="connSystem" placeholder="LABOUR" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="connType">
+                                <option value="WEBHOOK">Webhook (Push)</option>
+                                <option value="API_POLL">API Polling (Pull)</option>
+                                <option value="CDC">CDC (DB Stream)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Target URL / Endpoint</label>
+                        <div class="input-with-action">
+                            <input type="url" id="connUrl" placeholder="https://api.dept.gov.in/v1/updates">
+                            <button type="button" class="btn btn-secondary" onclick="testConnector()">Test</button>
+                        </div>
+                    </div>
+
+                    <!-- Test Results / AI Mapping Section -->
+                    <div id="testResultArea" style="display: none; margin-bottom: 1.5rem;">
+                        <div class="result-header">
+                            <span class="text-muted">Sample Data Received</span>
+                            <button type="button" class="btn-text" onclick="autoMapFields()">Auto-Map with AI</button>
+                        </div>
+                        <pre id="sampleJson" class="code-block"></pre>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Field Mappings (Source -> Canonical)</label>
+                        <div id="mappingList" class="mapping-list">
+                            <!-- Dynamic mapping rows -->
+                        </div>
+                        <button type="button" class="btn-text" onclick="addMappingRow()">+ Add Field Mapping</button>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Polling Interval (sec)</label>
+                            <input type="number" id="connInterval" value="60">
+                        </div>
+                        <div class="form-group">
+                            <label>Auth Token (Optional)</label>
+                            <input type="password" id="connAuth" placeholder="Bearer ...">
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="hideConnectorModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save & Activate</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Target System Modal -->
+        <div id="targetModal" class="modal">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h3>Setup Target System (Sending)</h3>
+                    <div class="modal-badge">PROPAGATION</div>
+                </div>
+                <form id="targetForm">
+                    <div class="form-group">
+                        <label>Target Name</label>
+                        <input type="text" id="targetName" placeholder="e.g. SWS Central Registry" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>System Type (ID)</label>
+                            <input type="text" id="targetSystem" placeholder="SWS" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Method</label>
+                            <select id="targetMethod">
+                                <option value="POST">POST (Standard)</option>
+                                <option value="PUT">PUT (Idempotent)</option>
+                                <option value="PATCH">PATCH (Delta)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Base Webhook URL</label>
+                        <input type="url" id="targetUrl" placeholder="http://sws.gov.in/api/v1/ingest" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Outgoing Mappings (Canonical -> Target)</label>
+                        <div id="targetMappingList" class="mapping-list">
+                            <!-- Dynamic mapping rows -->
+                        </div>
+                        <button type="button" class="btn-text" onclick="addTargetMappingRow()">+ Add Target Mapping</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Auth Header (Optional)</label>
+                        <input type="password" id="targetAuth" placeholder="Bearer ...">
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="btn" onclick="hideTargetModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Target</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

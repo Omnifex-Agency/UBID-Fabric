@@ -120,3 +120,31 @@ CREATE TABLE IF NOT EXISTS dead_letter_queue (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (event_id, target_system)
 );
+
+-- ─── Connectors Registry ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS connectors (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(100) NOT NULL,
+    system_type     VARCHAR(50) NOT NULL,
+    connector_type  VARCHAR(20) NOT NULL, -- 'WEBHOOK', 'API_POLLING', 'CDC'
+    config          JSONB NOT NULL, -- { url, interval, auth_header, etc. }
+    is_active       BOOLEAN DEFAULT TRUE,
+    last_run        TIMESTAMP WITH TIME ZONE,
+    last_status     VARCHAR(20) DEFAULT 'PENDING',
+    success_rate    FLOAT DEFAULT 100.0,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Target Systems Table (Sending)
+CREATE TABLE IF NOT EXISTS target_systems (
+    id              UUID PRIMARY KEY,
+    name            VARCHAR(255) NOT NULL,
+    system_type     VARCHAR(50) NOT NULL,
+    base_url        TEXT NOT NULL,
+    auth_header     TEXT,
+    config          JSONB NOT NULL, -- { method, payload_template, field_mappings }
+    is_active       BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

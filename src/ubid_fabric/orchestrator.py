@@ -33,23 +33,31 @@ class SagaOrchestrator:
         from ubid_fabric.schema_mapper import SchemaMapper
         self.mapper = SchemaMapper()
         
-        # Registry of writers for different systems
-        self.writers = {
-            "SWS": MockSWSWriter(evidence_graph),
-            "FACTORIES": MockFactoriesWriter(evidence_graph),
-            "SHOP_ESTABLISHMENT": MockShopEstablishmentWriter(evidence_graph),
-        }
+    async def _get_active_writers(self) -> dict[str, Any]:
+        """Fetch active target systems from DB and return dynamic writers."""
+        from ubid_fabric.target_writers import DynamicTargetWriter
+        writers = {}
+        with get_pg_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM target_systems WHERE is_active = TRUE")
+                targets = cur.fetchall()
+                for t in targets:
+                    writers[t["system_type"]] = DynamicTargetWriter(t, self.evidence)
+        return writers
 
     async def propagate(self, event: CanonicalEvent, event_node_id: str) -> PropagationResult:
         """Propagate a converged event to all subscribed target systems."""
         steps = []
         
-        # Simple rule for prototype: propagate to all systems EXCEPT the source
-        targets = [sys for sys in self.writers.keys() if sys != event.source_system]
+        # Load dynamic writers
+        writers = await self._get_active_writers()
+        
+        # Simple rule: propagate to all active targets EXCEPT the source
+        targets = [sys for sys in writers.keys() if sys != event.source_system]
 
-        # In Python 3.11+, TaskGroup is preferred, but gather is fine
+        # Execute propagation
         results = await asyncio.gather(
-            *[self._propagate_to_target(target, event, event_node_id) for target in targets],
+            *[self._propagate_to_target(target, event, event_node_id, writers) for target in targets],
             return_exceptions=True
         )
 
@@ -72,10 +80,10 @@ class SagaOrchestrator:
         )
 
     async def _propagate_to_target(
-        self, target: str, event: CanonicalEvent, event_node_id: str
+        self, target: str, event: CanonicalEvent, event_node_id: str, writers: dict
     ) -> SagaStepResult:
         """Attempt to push an event to a specific target system, with retries."""
-        if target not in self.writers:
+        if target not in writers:
             logger.error("no_writer_found", target=target)
             return SagaStepResult(target_system=target, status="ERROR", error="No writer found")
 
@@ -86,7 +94,7 @@ class SagaOrchestrator:
         while retries <= settings.max_saga_retries:
             try:
                 # Use the dedicated writer for this system
-                result = await self.writers[target].write(payload, event_node_id)
+                result = await writers[target].write(payload, event_node_id)
                 
                 if result["status"] == "SUCCESS":
                     return SagaStepResult(
