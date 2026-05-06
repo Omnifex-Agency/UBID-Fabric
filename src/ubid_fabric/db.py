@@ -108,6 +108,8 @@ class DictCursor:
         self.cursor = cursor
 
     def execute(self, operation, parameters=None):
+        if parameters is None:
+            return self.cursor.execute(operation)
         return self.cursor.execute(operation, parameters)
 
     def fetchone(self):
