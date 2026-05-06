@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ubid-fabric
+    env: docker
+    plan: free
+    dockerCommand: "uvicorn ubid_fabric.app:app --host 0.0.0.0 --port 8000"
+    envVars:
+      - key: DATABASE_URL
+        value: "postgresql://neondb_owner:npg_L0D5olakZRKb@ep-rough-frost-aobur553.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+      - key: REDIS_URL
+        value: "rediss://default:gQAAAAAAAcZdAAIgcDE1ZGU5NDdkZmNhYmQ0ZTM2OWI1MWQ0M2ZlYjBhMzMzNA@rich-eft-116317.upstash.io:6379"
+      - key: AI_PROVIDER
+        value: "gemini"
+      - key: AI_API_KEY
+        value: "AIzaSyBH8Y3iO50MR7wSWQq6em4EWa4oR5RlVsY"
+      - key: AI_MODEL
+        value: "gemini-1.5-flash"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: PORT
+        value: "8000"
