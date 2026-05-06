@@ -319,13 +319,72 @@ async function fetchSimulatedState() {
             } else {
                 container.innerHTML = entries.map(([id, data]) => `
                     <div class="db-record-card">
-                        <div class="record-id">${id}</div>
+                        <div class="record-id-row">
+                            <span class="record-id">${id}</span>
+                            <button class="btn-text" onclick="openMockEditModal('${dept}', '${id}', ${JSON.stringify(data).replace(/"/g, '&quot;')})">Edit</button>
+                        </div>
                         <pre class="record-data">${JSON.stringify(data, null, 2)}</pre>
                     </div>
                 `).join('');
             }
         });
     } catch(e) { console.error("Failed to fetch mock state", e); }
+}
+
+function openMockEditModal(system, ubid, data) {
+    document.getElementById('editSystem').value = system;
+    document.getElementById('editUbid').value = ubid;
+    const container = document.getElementById('editFieldsContainer');
+    container.innerHTML = '';
+    
+    Object.entries(data).forEach(([key, value]) => {
+        const div = document.createElement('div');
+        div.className = 'form-group';
+        div.innerHTML = `<label>${key}</label><input type="text" name="${key}" value="${value}">`;
+        container.appendChild(div);
+    });
+    
+    document.getElementById('mockEditModal').classList.add('active');
+}
+
+function hideMockEditModal() {
+    document.getElementById('mockEditModal').classList.remove('active');
+}
+
+async function handleMockEditSubmit(e) {
+    e.preventDefault();
+    const system = document.getElementById('editSystem').value;
+    const ubid = document.getElementById('editUbid').value;
+    const formData = new FormData(e.target);
+    const updatedData = {};
+    formData.forEach((value, key) => updatedData[key] = value);
+
+    try {
+        // 1. Update the Mock Database
+        await fetch(`${API_BASE}/mock/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ system, ubid, data: updatedData })
+        });
+
+        // 2. Trigger Fabric Ingestion (Webhook)
+        // We simulate the system pushing its change to the Fabric
+        await fetch(`${API_BASE}/api/ingest/webhook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_system: system,
+                entity_type: "FACTORY",
+                entity_id: ubid,
+                changes: Object.entries(updatedData).map(([k, v]) => ({ field: k, new: v })),
+                timestamp: new Date().toISOString()
+            })
+        });
+
+        hideMockEditModal();
+        fetchSimulatedState();
+        fetchEvents(); // Update dashboard
+    } catch(err) { alert("Update failed"); }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -343,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     document.getElementById('sandboxForm')?.addEventListener('submit', handleSandboxSubmit);
     document.getElementById('fileUploadForm')?.addEventListener('submit', handleFileUpload);
+    document.getElementById('mockEditForm')?.addEventListener('submit', handleMockEditSubmit);
     
     setInterval(() => {
         const activeTab = document.querySelector('.nav-links a.active')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];

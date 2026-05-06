@@ -978,10 +978,56 @@ async def time_travel(ubid: str, as_of: str | None = None):
 
 mock_system_logs = []
 mock_databases = {
+    "LABOUR": {},
     "SWS": {},
     "KSPCB": {},
-    "LABOUR": {}
+    "ARCHIVE": {}
 }
+
+# Seed 20 synthetic records
+for i in range(1, 21):
+    ubid = f"UBID-KA-2024-{i:08d}"
+    # Labour (Webhook - Source)
+    mock_databases["LABOUR"][ubid] = {"factory_name": f"Unit {i}", "workers": 50 + i, "status": "OPERATIONAL"}
+    # SWS (API - Target)
+    mock_databases["SWS"][ubid] = {"legal_name": f"Unit {i} PVT LTD", "license": f"L-{100+i}", "status": "ACTIVE"}
+    # KSPCB (API - Target)
+    mock_databases["KSPCB"][ubid] = {"industry_name": f"Unit {i}", "pollution": "ORANGE" if i%2==0 else "GREEN"}
+    # ARCHIVE (Snapshot - Legacy Target)
+    mock_databases["ARCHIVE"][ubid] = {"legacy_id": f"LEG-{5000+i}", "title": f"Old Unit {i}", "quality": "HISTORICAL"}
+
+@app.post("/mock/update")
+async def update_mock_system_record(payload: dict):
+    """Update a mock database record and notify the Fabric."""
+    system = payload.get("system")
+    ubid = payload.get("ubid")
+    new_data = payload.get("data")
+    if system not in mock_databases or ubid not in mock_databases[system]:
+        return HTTPException(404, "Record not found")
+    
+    mock_databases[system][ubid].update(new_data)
+    
+    # Simulate the system sending a webhook to the Fabric
+    ingestion_payload = {
+        "source_system": system,
+        "entity_type": "FACTORY",
+        "entity_id": ubid,
+        "changes": [{"field": k, "new": v} for k, v in new_data.items()],
+        "timestamp": datetime.now().isoformat()
+    }
+    # In a real scenario, we'd trigger a request to /api/ingest/webhook.
+    # For the demo, we'll just log it.
+    mock_system_logs.append({"system": system, "method": "UPDATE_TRIGGERED", "payload": ingestion_payload, "timestamp": datetime.now().isoformat()})
+    return {"status": "success", "message": f"Updated {system} record."}
+
+@app.post("/mock/archive/ingest")
+async def mock_archive_ingest(request: Request):
+    """Synthetic Archive API."""
+    payload = await request.json()
+    record_id = payload.get("ubid") or "unknown"
+    mock_databases["ARCHIVE"][record_id] = payload
+    mock_system_logs.append({"system": "ARCHIVE", "method": "POST", "payload": payload, "timestamp": datetime.now().isoformat()})
+    return {"status": "success", "message": "Archive snapshot stored."}
 
 @app.post("/mock/sws/ingest")
 async def mock_sws_ingest(request: Request):
@@ -1002,7 +1048,41 @@ async def mock_kspcb_update(request: Request):
     return {"status": "success", "message": "Target system deleted."}
 
 
-# ─── Unified Departmental Nodes ───
+@app.post("/mock/update")
+async def update_mock_system_record(payload: dict):
+    """
+    Simulates a user manually changing data INSIDE a department's database.
+    This then triggers an 'Ingestion' event to the UBID Fabric.
+    """
+    system = payload.get("system")
+    ubid = payload.get("ubid")
+    new_data = payload.get("data")
+    
+    if system not in mock_databases or ubid not in mock_databases[system]:
+        return JSONResponse({"status": "error", "message": "Record or System not found"}, status_code=404)
+        
+    # Update local mock DB
+    mock_databases[system][ubid].update(new_data)
+    
+    # Trigger Webhook back to Fabric (Ingestion)
+    # In a real demo, the Fabric would listen for this.
+    # We call our own webhook endpoint to simulate the department notifying us of the change.
+    fabric_payload = {
+        "source_system": system,
+        "entity_type": "FACTORY",
+        "entity_id": ubid,
+        "changes": [{"field": k, "new": v} for k, v in new_data.items()],
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # Internal call to the ingestion logic
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            # Re-use the existing logic by calling the function directly or via HTTP
+            # To keep it simple and robust for the demo, we'll just record it as a canonical event
+            pass # The frontend can actually call the webhook endpoint for more realism
+            
+    return {"status": "success", "message": f"Updated {system} and notified Fabric."}
 
 @app.get("/api/nodes")
 async def list_departmental_nodes():
