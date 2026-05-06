@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from typing import Any
 
 import httpx
 import structlog
@@ -157,7 +158,10 @@ class SagaOrchestrator:
         Used when a manual review rejects an auto-merged conflict or UBID resolution.
         """
         steps = []
-        targets = [sys for sys in TARGET_SYSTEM_WEBHOOKS.keys() if sys != event.source_system]
+
+        # Load dynamic writers to find targets
+        writers = await self._get_active_writers()
+        targets = [sys for sys in writers.keys() if sys != event.source_system]
 
         logger.info("compensating_event", event_id=event.event_id[:16], ubid=event.ubid)
 
@@ -174,7 +178,8 @@ class SagaOrchestrator:
         }
 
         async def _compensate_target(target: str) -> SagaStepResult:
-            webhook_url = TARGET_SYSTEM_WEBHOOKS[target]
+            if target not in writers:
+                return SagaStepResult(target_system=target, status="ERROR", error="No writer")
             try:
                 comp_node = EvidenceNode(
                     node_type=EvidenceNodeType.MANUAL_DECISION,
@@ -185,11 +190,11 @@ class SagaOrchestrator:
                 comp_id = self.evidence.add_node(comp_node)
                 self.evidence.link(event_node_id, comp_id, EvidenceEdgeType.CAUSED_BY)
 
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(webhook_url, json=payload, timeout=5.0)
-                    resp.raise_for_status()
-
-                return SagaStepResult(target_system=target, status="COMPENSATED", retries=0)
+                result = await writers[target].write(payload, event_node_id)
+                if result["status"] == "SUCCESS":
+                    return SagaStepResult(target_system=target, status="COMPENSATED", retries=0)
+                else:
+                    raise Exception(result.get("error", "Unknown"))
             except Exception as e:
                 logger.error("compensation_failed", target=target, error=str(e))
                 self._write_to_dlq(f"comp-{event.event_id}", event.ubid, target)

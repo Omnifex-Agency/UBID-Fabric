@@ -1,6 +1,6 @@
 """UBID Fabric — Configuration (loaded from .env)"""
 
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     ai_api_key: str = ""
     ai_base_url: str = "http://localhost:11434/v1"  # Default for Ollama
     ai_model: str = "llama3"  # or "gemini-1.5-flash"
+
+    # Security
+    webhook_signature_secret: str = "ubid-fabric-shared-secret"
 
     class Config:
         env_file = ".env"

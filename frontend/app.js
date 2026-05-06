@@ -66,11 +66,11 @@ async function fetchEvents() {
 
             tr.innerHTML = `
                 <td class="hash-cell" title="${event.event_id}">${event.event_id.substring(0, 16)}...</td>
-                <td><span class="badge">${event.ubid}</span></td>
-                <td><span class="badge">${event.source_system}</span></td>
-                <td>T: ${event.lamport_ts}</td>
+                <td><span class="badge" style="background: var(--zebra-striping); color: var(--primary); border: 1px solid var(--border-light); font-family: 'JetBrains Mono', monospace;">${event.ubid}</span></td>
+                <td><span class="badge" style="background: rgba(45, 106, 79, 0.1); color: var(--accent); border: 1px solid rgba(45, 106, 79, 0.2);">${event.source_system}</span></td>
+                <td><small style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">T: ${event.lamport_ts}</small></td>
                 <td class="text-muted">${timeStr}</td>
-                <td>${fields || 'None'}</td>
+                <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent);">${fields || 'None'}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -103,21 +103,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function showTab(tabId) {
     // Hide all tabs
-    document.getElementById('dashboardTab').style.display = 'none';
-    document.getElementById('hubTab').style.display = 'none';
-    document.getElementById('evidenceTab').style.display = 'none';
-    document.getElementById('dlqTab').style.display = 'none';
-    document.getElementById('metricsTab').style.display = 'none';
-    document.getElementById('ingestTab').style.display = 'none';
+    document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
     
     // Show selected tab
-    document.getElementById(`${tabId}Tab`).style.display = 'block';
+    const target = document.getElementById(`${tabId}Tab`);
+    if(target) target.style.display = 'block';
     
     // Update nav links
     document.querySelectorAll('.nav-links a').forEach(a => {
         a.classList.remove('active');
-        const linkText = a.textContent.toLowerCase();
-        if(linkText.includes(tabId)) a.classList.add('active');
+        const onclickStr = a.getAttribute('onclick') || '';
+        if(onclickStr.includes(`'${tabId}'`)) a.classList.add('active');
     });
 
     // Load tab-specific data
@@ -269,12 +265,17 @@ async function fetchEvidence() {
             const date = new Date(node.timestamp);
             const timeStr = date.toLocaleTimeString() + ' ' + date.toLocaleDateString();
             
+            let badgeStyle = "background: rgba(13, 40, 24, 0.05); color: var(--primary); border: 1px solid rgba(13, 40, 24, 0.1);";
+            if(node.node_type.includes('CONFLICT')) badgeStyle = "background: rgba(244, 162, 97, 0.1); color: var(--warning); border: 1px solid rgba(244, 162, 97, 0.2);";
+            if(node.node_type.includes('DLQ') || node.node_type.includes('FAILED')) badgeStyle = "background: rgba(188, 71, 73, 0.1); color: var(--danger); border: 1px solid rgba(188, 71, 73, 0.2);";
+            if(node.node_type.includes('SUCCESS') || node.node_type.includes('CONFIRMATION')) badgeStyle = "background: rgba(116, 198, 157, 0.1); color: var(--success); border: 1px solid rgba(116, 198, 157, 0.2);";
+
             tr.innerHTML = `
-                <td><span class="badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent);">${node.node_type}</span></td>
-                <td><span class="badge">${node.ubid || 'N/A'}</span></td>
+                <td><span class="badge" style="${badgeStyle}">${node.node_type}</span></td>
+                <td><span class="badge" style="background: var(--zebra-striping); color: var(--text-main); border: 1px solid var(--border-light); font-family: 'JetBrains Mono', monospace;">${node.ubid || 'N/A'}</span></td>
                 <td class="hash-cell">${node.event_id ? node.event_id.substring(0, 12) + '...' : 'System'}</td>
                 <td class="text-muted">${timeStr}</td>
-                <td><small>${JSON.stringify(node.payload).substring(0, 50)}...</small></td>
+                <td><small style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--accent);">${JSON.stringify(node.payload).substring(0, 120)}...</small></td>
             `;
             tbody.appendChild(tr);
         });
@@ -302,9 +303,9 @@ async function fetchDLQ() {
             
             tr.innerHTML = `
                 <td class="hash-cell">${entry.event_id.substring(0, 12)}...</td>
-                <td><span class="badge">${entry.ubid}</span></td>
+                <td><span class="badge" style="background: var(--zebra-striping); color: var(--primary); border: 1px solid var(--border-light); font-family: 'JetBrains Mono', monospace;">${entry.ubid}</span></td>
                 <td><strong>${entry.target_system}</strong></td>
-                <td><span class="badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">${entry.status}</span></td>
+                <td><span class="badge" style="background: rgba(188, 71, 73, 0.1); color: var(--danger); border: 1px solid rgba(188, 71, 73, 0.2); font-weight: 600;">${entry.status}</span></td>
                 <td class="text-muted">${date.toLocaleString()}</td>
                 <td>
                     <button class="btn btn-primary" style="padding: 0.3rem 0.7rem; font-size: 0.8rem;" onclick="retryDLQ(${entry.dlq_id})">Retry</button>

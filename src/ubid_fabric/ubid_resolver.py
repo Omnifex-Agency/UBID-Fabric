@@ -98,7 +98,7 @@ class UBIDResolver:
 
         if record:
             # Found exact match — high base score
-            score = 0.40
+            score = 0.95
 
             # Add name similarity if available
             if business_name and record.business_name:

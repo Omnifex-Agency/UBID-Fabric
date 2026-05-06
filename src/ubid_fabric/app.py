@@ -1,15 +1,23 @@
 """
-UBID Fabric — FastAPI Application
+UBID Fabric v0.2 — FastAPI Application
 REST API for webhooks, review console, dashboard, and evidence graph.
 """
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import hmac
+import io
+import json
+import os
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 import structlog
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
+from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -36,13 +44,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="UBID Fabric",
-    description="Deterministic Interoperability Layer for Karnataka SWS",
-    version="0.1.0",
+    description="Deterministic Interoperability Layer for Karnataka SWS — Production Edition",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
 # Mount static frontend
-import os
 os.makedirs("frontend", exist_ok=True)
 app.mount("/ui", StaticFiles(directory="frontend", html=True), name="ui")
 
@@ -60,24 +67,29 @@ resolver = UBIDResolver()
 class WebhookPayload(BaseModel):
     source_system: str
     entity_type: str
-    entity_id: str
+    entity_id: str | None = None
     business_name: str = ""
     address: str = ""
     changes: list[dict]  # [{"field": "...", "old": ..., "new": ...}]
     timestamp: str | None = None
 
+    class Config:
+        extra = "allow"
 
-@app.post("/webhook/ingest")
+
+@app.post("/api/ingest/webhook")
 async def ingest_webhook(payload: WebhookPayload):
     """
     Universal webhook endpoint. Any source system can push changes here.
     Processes through the full UBID Fabric pipeline.
     """
+    entity_id = payload.entity_id or getattr(payload, 'external_id', None) or payload.dict().get('external_id', payload.entity_id)
+    
     field_changes = [
         FieldChange(
             field_name=c["field"],
             old_value=c.get("old"),
-            new_value=c.get("new"),
+            new_value=c.get("value") if "value" in c else c.get("new"),
         )
         for c in payload.changes
     ]
@@ -88,7 +100,7 @@ async def ingest_webhook(payload: WebhookPayload):
         connector_id=f"webhook-{payload.source_system.lower()}",
         source_system=payload.source_system,
         entity_type=payload.entity_type,
-        entity_id=payload.entity_id,
+        entity_id=entity_id,
         changed_fields=field_changes,
         change_timestamp=ts,
         capture_method=CaptureMethod.WEBHOOK,
@@ -100,7 +112,7 @@ async def ingest_webhook(payload: WebhookPayload):
         address=payload.address,
     )
 
-    return {"status": "accepted", "result": result}
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -119,7 +131,7 @@ class RegisterBusinessPayload(BaseModel):
 @app.post("/registry/register")
 async def register_business(payload: RegisterBusinessPayload):
     """Register a business in the UBID registry."""
-    record = UBIDRecord(**payload.model_dump())
+    record = UBIDRecord(**payload.dict())
     resolver.register(record)
     return {"status": "registered", "ubid": payload.ubid}
 
@@ -239,10 +251,67 @@ async def retry_dlq(dlq_id: int):
             # Update status to RETRYING
             cur.execute("UPDATE dead_letter_queue SET status = 'RETRYING' WHERE dlq_id = %s", (dlq_id,))
             conn.commit()
-            
-            # In a real system, this would trigger a background task. 
-            # For the prototype, we just mark it as handled.
-            return {"status": "retry_initiated", "dlq_id": dlq_id}
+
+            try:
+                # Load event from DB
+                raw_event = event_store.get_by_id(entry["event_id"])
+                if not raw_event:
+                    raise Exception("Original event not found")
+                
+                # Parse field changes
+                field_changes_data = raw_event["field_changes"]
+                if isinstance(field_changes_data, str):
+                    field_changes_data = json.loads(field_changes_data)
+                
+                from ubid_fabric.models import (
+                    CanonicalFieldChange, EventCausality, EventMetadata, 
+                    UBIDConfidence, EventType, CanonicalEvent,
+                    EvidenceNode, EvidenceEdgeType, EvidenceNodeType
+                )
+                
+                # Reconstruct CanonicalEvent
+                event = CanonicalEvent(
+                    event_id=raw_event["event_id"],
+                    ubid=raw_event["ubid"],
+                    source_system=raw_event["source_system"],
+                    entity_type=raw_event["entity_type"],
+                    event_type=EventType(raw_event["event_type"]),
+                    ubid_confidence=UBIDConfidence(raw_event["ubid_confidence"]),
+                    lamport_timestamp=raw_event["lamport_ts"],
+                    field_changes=[CanonicalFieldChange(**fc) for fc in field_changes_data],
+                    payload_hash=raw_event["payload_hash"],
+                    causality=EventCausality(**(json.loads(raw_event["causality"]) if isinstance(raw_event["causality"], str) else raw_event["causality"])),
+                    metadata=EventMetadata(**(json.loads(raw_event["metadata"]) if isinstance(raw_event["metadata"], str) else raw_event["metadata"]))
+                )
+
+                writers = await pipeline.orchestrator._get_active_writers()
+                target = entry["target_system"]
+                
+                # Create a new evidence node for the manual retry trigger
+                retry_node = EvidenceNode(
+                    node_type=EvidenceNodeType.MANUAL_DECISION,
+                    ubid=event.ubid,
+                    event_id=event.event_id,
+                    payload={"action": "DLQ_RETRY", "target": target}
+                )
+                retry_node_id = evidence.add_node(retry_node)
+
+                # Propagate specifically to this target
+                result = await pipeline.orchestrator._propagate_to_target(target, event, str(retry_node_id), writers)
+                
+                if result.status == "SUCCESS":
+                    cur.execute("UPDATE dead_letter_queue SET status = 'RESOLVED' WHERE dlq_id = %s", (dlq_id,))
+                    conn.commit()
+                    return {"status": "success", "target": target}
+                else:
+                    cur.execute("UPDATE dead_letter_queue SET status = 'FAILED' WHERE dlq_id = %s", (dlq_id,))
+                    conn.commit()
+                    return {"status": "failed", "error": result.error}
+                    
+            except Exception as e:
+                cur.execute("UPDATE dead_letter_queue SET status = 'FAILED' WHERE dlq_id = %s", (dlq_id,))
+                conn.commit()
+                return {"status": "error", "message": str(e)}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -279,8 +348,6 @@ async def suggest_mapping(payload: AIMappingPayload):
 from ubid_fabric.models import Connector, ConnectorConfig, TargetSystem
 from ubid_fabric.db import get_pg_connection
 
-from fastapi.encoders import jsonable_encoder
-
 @app.get("/api/connectors")
 async def list_connectors():
     """List all registered connectors."""
@@ -305,7 +372,7 @@ async def create_connector(connector: Connector):
                     connector.name,
                     connector.system_type,
                     connector.connector_type,
-                    connector.config.model_dump_json(),
+                    connector.config.json(),
                     connector.is_active,
                     connector.last_status,
                     connector.success_rate
@@ -448,11 +515,47 @@ class DryRunPayload(BaseModel):
 async def simulator_dry_run(payload: DryRunPayload):
     """
     Test a mapping configuration against sample data without saving anything.
+    Uses the real TransformationRules engine for high-fidelity simulation.
     """
+    from ubid_fabric.schema_mapper import TransformationRules
+    rules_engine = TransformationRules()
+    
     result = {}
-    for source_key, target_key in payload.field_mappings.items():
+    # First pass: direct mappings and simple transforms
+    for source_key, mapping in payload.field_mappings.items():
+        # Handle both simple string mapping and complex rule object
+        if isinstance(mapping, str):
+            target_key = mapping
+            transform_name = None
+        else:
+            target_key = mapping.get("target_field", source_key)
+            transform_name = mapping.get("transform")
+            
         if source_key in payload.source_data:
-            result[target_key] = payload.source_data[source_key]
+            val = payload.source_data[source_key]
+            if transform_name and hasattr(rules_engine, transform_name):
+                try:
+                    val = getattr(rules_engine, transform_name)(val)
+                except Exception as e:
+                    logger.warning("simulator_transform_error", field=source_key, error=str(e))
+            
+            result[target_key] = val
+            
+    # Second pass: derived mappings (where source_field is specified)
+    for rule_name, mapping in payload.field_mappings.items():
+        if isinstance(mapping, dict) and "source_field" in mapping:
+            source_field = mapping["source_field"]
+            target_key = mapping.get("target_field", rule_name)
+            transform_name = mapping.get("transform")
+            
+            if source_field in payload.source_data:
+                val = payload.source_data[source_field]
+                if transform_name and hasattr(rules_engine, transform_name):
+                    try:
+                        val = getattr(rules_engine, transform_name)(val)
+                        result[target_key] = val
+                    except Exception:
+                        pass
     
     return {
         "status": "success",
@@ -603,11 +706,7 @@ async def get_ubid_record(ubid: str):
 # Phase 3: File Ingestion (CSV/XML Batch Processing)
 # ═══════════════════════════════════════════════════════════════
 
-import csv
-import io
-import json
-import uuid
-from fastapi import UploadFile, File, Form
+
 
 @app.post("/api/ingest/file")
 async def ingest_file(
@@ -688,7 +787,7 @@ async def ingest_file(
 # ═══════════════════════════════════════════════════════════════
 
 # Simple API Key middleware for prototype-level security
-from fastapi import Request
+
 
 RBAC_ROLES = {
     "admin": ["read", "write", "delete", "approve_conflicts", "manage_connectors", "manage_schema"],
@@ -723,12 +822,9 @@ async def verify_payload_signature(request: Request):
     Verify the HMAC-SHA256 signature of an incoming department payload.
     Departments must include an X-Signature header.
     """
-    import hashlib
-    import hmac
-
     body = await request.body()
     signature = request.headers.get("X-Signature", "")
-    secret = "ubid-fabric-shared-secret"  # In production, loaded per-connector
+    secret = settings.webhook_signature_secret
 
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
@@ -873,12 +969,7 @@ async def time_travel(ubid: str, as_of: str | None = None):
                         "lamport_ts": evt["lamport_ts"],
                     }
 
-            return {
-                "ubid": ubid,
-                "as_of": as_of or "latest",
-                "events_replayed": len(events),
-                "reconstructed_state": state,
-            }
+            return state
 
 
 @app.get("/")

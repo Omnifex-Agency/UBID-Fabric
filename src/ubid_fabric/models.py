@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, validator
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -206,16 +206,14 @@ class CanonicalEvent(BaseModel):
     causality: Causality = Field(default_factory=Causality)
     metadata: EventMetadata
 
-    @computed_field
     @property
     def payload_hash(self) -> str:
         canonical = json.dumps(
-            [fc.model_dump() for fc in self.field_changes],
+            [fc.dict() for fc in self.field_changes],
             sort_keys=True, separators=(",", ":"), default=str,
         )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    @computed_field
     @property
     def event_id(self) -> str:
         """Deterministic event ID — same input always = same ID."""

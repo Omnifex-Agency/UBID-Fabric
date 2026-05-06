@@ -21,6 +21,7 @@ from ubid_fabric.conflict_engine import ConflictEngine
 from ubid_fabric.idempotency import IdempotencyStore
 from ubid_fabric.evidence_graph import EvidenceGraph
 from ubid_fabric.orchestrator import SagaOrchestrator
+from ubid_fabric.schema_mapper import SchemaMapper
 
 logger = structlog.get_logger()
 
@@ -41,6 +42,7 @@ class Pipeline:
         self.idempotency = IdempotencyStore()
         self.evidence = EvidenceGraph()
         self.orchestrator = SagaOrchestrator(self.evidence)
+        self.mapper = SchemaMapper()
 
     async def process(self, raw: RawChange, business_name: str = "",
                 address: str = "") -> dict:
@@ -58,6 +60,10 @@ class Pipeline:
         }
 
         try:
+            # Normalize incoming department-specific fields to canonical names
+            changes_data = [{"field": c.field_name, "value": c.new_value} for c in raw.changed_fields]
+            raw.changed_fields = self.mapper.map_incoming_to_canonical(raw.source_system, changes_data)
+
             # ─── L3: UBID Resolution ────────────────────────
             resolution = self.ubid_resolver.resolve(
                 entity_id=raw.entity_id,
@@ -93,6 +99,7 @@ class Pipeline:
                 ubid=resolution.ubid,
                 ubid_confidence=resolution.state,
             )
+            result["event_id"] = event.event_id
 
             # ─── L5: Idempotency Check ──────────────────────
             if not self.idempotency.try_claim(event.event_id):

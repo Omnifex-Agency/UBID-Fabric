@@ -10,17 +10,14 @@ build/
 dist/
 *.egg-info/
 
-# Databases
-*.db
-*.sqlite
 
-# Environment
-.env
+
+
 
 # IDEs
 .vscode/
 .idea/
 
 # OS
-.DS_Store
+
 Thumbs.db

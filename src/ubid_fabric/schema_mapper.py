@@ -80,20 +80,48 @@ class SchemaMapper:
     
     # In production, these mappings are fetched from PostgreSQL `schema_mappings`
     MAPPINGS = {
+        "SWS": {
+            "business_name": {"target_field": "entity_name", "transform": None},
+            "registered_address": {"target_field": "primary_address", "transform": None},
+            "registration_date": {"target_field": "reg_date", "transform": "date_iso_to_dd_mm_yyyy"},
+            "licence_status": {"target_field": "current_status", "transform": "conditional_status"},
+            "owner_name": {"target_field": "proprietor_name", "transform": None},
+            "contact_phone": {"target_field": "phone", "transform": "format_phone"},
+        },
         "FACTORIES": {
             "business_name": {"target_field": "factory_name", "transform": "uppercase"},
+            "registered_address": {"target_field": "factory_address", "transform": None},
             "registration_date": {"target_field": "established_date", "transform": "date_iso_to_dd_mm_yyyy"},
-            "licence_status": {"target_field": "status", "transform": "conditional_status"}
+            "licence_status": {"target_field": "status", "transform": "conditional_status"},
+            "employee_count": {"target_field": "num_workers", "transform": None},
+            "pincode": {
+                "source_field": "registered_address",
+                "target_field": "pin_code",
+                "transform": "extract_pincode"
+            }
         },
         "SHOP_ESTABLISHMENT": {
             "business_name": {"target_field": "shop_title", "transform": None},
             "registered_address": {"target_field": "address_line_1", "transform": None},
+            "owner_name": {"target_field": "proprietor", "transform": None},
             "pincode": {
                 "source_field": "registered_address",
                 "target_field": "postal_code",
                 "transform": "extract_pincode"
             }
-        }
+        },
+        "LABOUR": {
+            "business_name": {"target_field": "establishment_name", "transform": None},
+            "registered_address": {"target_field": "workplace_address", "transform": None},
+            "employee_count": {"target_field": "total_employees", "transform": None},
+            "licence_status": {"target_field": "registration_status", "transform": "conditional_status"},
+            "contact_phone": {"target_field": "contact_number", "transform": "format_phone"},
+        },
+        "COMMERCIAL_TAXES": {
+            "business_name": {"target_field": "dealer_name", "transform": "uppercase"},
+            "registered_address": {"target_field": "place_of_business", "transform": None},
+            "licence_status": {"target_field": "gst_status", "transform": "conditional_status"},
+        },
     }
 
     def _get_transform(self, name: str | None) -> Callable | None:
@@ -175,3 +203,29 @@ class SchemaMapper:
 
         target_payload["changes"] = mapped_changes
         return target_payload
+
+    def map_incoming_to_canonical(self, source_system: str, changes: List[Dict[str, Any]]) -> List[FieldChange]:
+        """
+        Translates a department-specific incoming payload into the Fabric's canonical schema.
+        Reverse of map_event_for_target.
+        """
+        mapping_def = self.MAPPINGS.get(source_system, {})
+        if not mapping_def:
+            return [FieldChange(field_name=c["field"], value=c["value"]) for c in changes]
+
+        # Build inversion map (target_field -> canonical_field)
+        inversion = {}
+        for canonical_key, rules in mapping_def.items():
+            if isinstance(rules, dict):
+                target_key = rules.get("target_field")
+                if target_key:
+                    inversion[target_key] = canonical_key
+
+        canonical_changes = []
+        for change in changes:
+            source_field = change["field"]
+            val = change["value"]
+            canonical_field = inversion.get(source_field, source_field)
+            canonical_changes.append(FieldChange(field_name=canonical_field, value=val))
+            
+        return canonical_changes

@@ -96,7 +96,7 @@ class MockFactoriesWriter(TargetWriter):
     def __init__(self, evidence: EvidenceGraph):
         super().__init__(
             system_name="FACTORIES",
-            base_url="http://localhost:8001/mock-factories",
+            base_url="http://localhost:8000/mock/dept/factories",
             evidence=evidence,
         )
 
@@ -119,7 +119,7 @@ class MockSWSWriter(TargetWriter):
     def __init__(self, evidence: EvidenceGraph):
         super().__init__(
             system_name="SWS",
-            base_url="http://localhost:8001/mock-sws",
+            base_url="http://localhost:8000/mock/dept/sws",
             evidence=evidence,
         )
 
@@ -142,7 +142,30 @@ class MockShopEstablishmentWriter(TargetWriter):
     def __init__(self, evidence: EvidenceGraph):
         super().__init__(
             system_name="SHOP_ESTABLISHMENT",
-            base_url="http://localhost:8001/mock-shop-estb",
+            base_url="http://localhost:8000/mock/dept/shop-estb",
+            evidence=evidence,
+        )
+
+    async def _do_write(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.base_url}/webhook",
+                json=payload,
+                timeout=5.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+
+class MockLabourWriter(TargetWriter):
+    """
+    Writes to the Labour Department mock API.
+    """
+
+    def __init__(self, evidence: EvidenceGraph):
+        super().__init__(
+            system_name="LABOUR",
+            base_url="http://localhost:8000/mock/dept/labour",
             evidence=evidence,
         )
 
