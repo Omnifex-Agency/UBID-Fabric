@@ -999,7 +999,53 @@ async def mock_kspcb_update(request: Request):
     record_id = payload.get("ubid") or payload.get("company_name") or "unknown"
     mock_databases["KSPCB"][record_id] = payload
     mock_system_logs.append({"system": "KSPCB", "method": "PUT", "payload": payload, "timestamp": datetime.now().isoformat()})
-    return {"status": "success", "message": "KSPCB record updated."}
+    return {"status": "success", "message": "Target system deleted."}
+
+
+# ─── Unified Departmental Nodes ───
+
+@app.get("/api/nodes")
+async def list_departmental_nodes():
+    """Returns a unified view of departments, showing both Ingress and Egress status."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            # Fetch all ingress (connectors)
+            cur.execute("SELECT id, name, system_type, connector_type, is_active, last_status, success_rate FROM connectors")
+            connectors = cur.fetchall()
+            
+            # Fetch all egress (targets)
+            cur.execute("SELECT id, name, system_type, is_active FROM target_systems")
+            targets = cur.fetchall()
+            
+            # Group by system_type
+            nodes = {}
+            
+            # Process connectors (Ingress)
+            for c in connectors:
+                st = c["system_type"]
+                if st not in nodes:
+                    nodes[st] = {"system_type": st, "ingress": None, "egress": None}
+                nodes[st]["ingress"] = {
+                    "id": str(c["id"]),
+                    "name": c["name"],
+                    "type": c["connector_type"],
+                    "is_active": c["is_active"],
+                    "status": c["last_status"],
+                    "success_rate": c["success_rate"]
+                }
+                
+            # Process targets (Egress)
+            for t in targets:
+                st = t["system_type"]
+                if st not in nodes:
+                    nodes[st] = {"system_type": st, "ingress": None, "egress": None}
+                nodes[st]["egress"] = {
+                    "id": str(t["id"]),
+                    "name": t["name"],
+                    "is_active": t["is_active"]
+                }
+                
+            return list(nodes.values())
 
 @app.post("/mock/labour/webhook")
 async def mock_labour_webhook(request: Request):

@@ -69,40 +69,22 @@
 
             <!-- Routing & Hub Tab -->
             <div id="hubTab" style="display: none;">
-                <div class="hub-layout">
-                    <section class="hub-column">
-                        <div class="section-header">
-                            <div>
-                                <h2>Ingestion Sources</h2>
-                                <p class="text-muted">Incoming data from departments</p>
-                            </div>
-                            <button class="btn btn-primary btn-sm" onclick="showAddConnectorModal()">+ Add Source</button>
+                <section class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Departmental Network Nodes</h2>
+                            <p class="text-muted">Managed connections for every government system</p>
                         </div>
-                        <div class="hub-grid" id="connectorsGrid"></div>
-                    </section>
-
-                    <div class="hub-pipeline-visual">
-                        <div class="pipeline-flow">
-                            <div class="flow-line"></div>
-                            <div class="fabric-core-node">
-                                <div class="core-icon"></div>
-                                <span>UBID CORE</span>
-                            </div>
-                            <div class="flow-line"></div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary btn-sm" onclick="showAddConnectorModal()">+ Ingress</button>
+                            <button class="btn btn-primary btn-sm" onclick="showAddTargetModal()">+ Egress</button>
                         </div>
                     </div>
-
-                    <section class="hub-column">
-                        <div class="section-header">
-                            <div>
-                                <h2>Propagation Targets</h2>
-                                <p class="text-muted">Outgoing data to departments</p>
-                            </div>
-                            <button class="btn btn-primary btn-sm" onclick="showAddTargetModal()">+ Add Target</button>
-                        </div>
-                        <div class="hub-grid" id="targetsGrid"></div>
-                    </section>
-                </div>
+                    <div class="nodes-grid" id="nodesGrid">
+                        <!-- Populated by JS -->
+                    </div>
+                </section>
+            </div>
 
                 <section class="content-section" style="margin-top: 2rem;">
                     <div class="section-header">

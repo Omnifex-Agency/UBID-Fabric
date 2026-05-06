@@ -595,11 +595,83 @@ body {
     margin-bottom: 0.5rem;
     font-family: monospace;
 }
-.record-data {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    white-space: pre-wrap;
+/* Unified Nodes Grid */
+.nodes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.node-card {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    transition: transform 0.2s;
+}
+
+.node-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.node-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.node-header h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--primary);
+}
+
+.node-channels {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.channel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
     background: #f8fafc;
-    padding: 0.5rem;
-    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    opacity: 0.6;
+}
+
+.channel.active {
+    opacity: 1;
+    background: #fff;
+    border-color: var(--border-light);
+}
+
+.channel-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.channel-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.channel-status {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.node-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-light);
 }

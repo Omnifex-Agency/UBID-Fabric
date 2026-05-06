@@ -96,7 +96,7 @@ function showTab(tabId) {
 
     // Refresh tab data
     if(tabId === 'dashboardTab') { fetchEvents(); fetchStatus(); }
-    if(tabId === 'hubTab') { fetchConnectors(); fetchTargets(); fetchDLQ(); }
+    if(tabId === 'hubTab') { fetchNodes(); fetchDLQ(); }
     if(tabId === 'auditTab') { fetchEvidence(); fetchMetrics(); fetchDriftAnalytics(); }
     if(tabId === 'simulatedTab') { fetchSimulatedState(); }
 }
@@ -105,42 +105,37 @@ function showTab(tabId) {
 // Phase 3: Hub, Routing & DLQ
 // ═══════════════════════════════════════════════════════════════
 
-async function fetchConnectors() {
+async function fetchNodes() {
     try {
-        const response = await fetch(`${API_BASE}/api/connectors`);
-        const connectors = await response.json();
-        const grid = document.getElementById('connectorsGrid');
+        const response = await fetch(`${API_BASE}/api/nodes`);
+        const nodes = await response.json();
+        const grid = document.getElementById('nodesGrid');
         if(!grid) return;
-        grid.innerHTML = connectors.map(conn => `
-            <div class="connector-card glass-panel">
-                <div class="connector-header">
-                    <h3>${conn.name}</h3>
-                    <div class="dot ${conn.is_active ? 'active' : ''}"></div>
+        
+        grid.innerHTML = nodes.map(node => `
+            <div class="node-card glass-panel">
+                <div class="node-header">
+                    <div class="dept-icon ${node.system_type.toLowerCase()}" style="width: 24px; height: 24px; border-radius: 4px;"></div>
+                    <h3>${node.system_type}</h3>
                 </div>
-                <div class="connector-details">
-                    <div>System: <strong>${conn.system_type}</strong></div>
-                    <div class="connector-metrics">SR: ${conn.success_rate}%</div>
+                <div class="node-channels">
+                    <div class="channel ${node.ingress?.is_active ? 'active' : ''}">
+                        <div class="channel-info">
+                            <span class="channel-label">Ingress (In)</span>
+                            <span class="channel-status">${node.ingress ? node.ingress.type : 'Not Setup'}</span>
+                        </div>
+                        <div class="dot ${node.ingress?.is_active ? 'active' : ''}"></div>
+                    </div>
+                    <div class="channel ${node.egress?.is_active ? 'active' : ''}">
+                        <div class="channel-info">
+                            <span class="channel-label">Egress (Out)</span>
+                            <span class="channel-status">${node.egress ? 'Connected' : 'Not Setup'}</span>
+                        </div>
+                        <div class="dot ${node.egress?.is_active ? 'active' : ''}"></div>
+                    </div>
                 </div>
-            </div>
-        `).join('');
-    } catch(e) { console.error(e); }
-}
-
-async function fetchTargets() {
-    try {
-        const response = await fetch(`${API_BASE}/api/targets`);
-        const targets = await response.json();
-        const grid = document.getElementById('targetsGrid');
-        if(!grid) return;
-        grid.innerHTML = targets.map(t => `
-            <div class="connector-card glass-panel">
-                <div class="connector-header">
-                    <h3>${t.name}</h3>
-                    <div class="dot ${t.is_active ? 'active' : ''}"></div>
-                </div>
-                <div class="connector-details">
-                    <div>System: <strong>${t.system_type}</strong></div>
-                    <div class="connector-url">${t.base_url}</div>
+                <div class="node-footer">
+                    <span class="text-muted" style="font-size: 0.7rem;">SR: ${node.ingress?.success_rate || 100}%</span>
                 </div>
             </div>
         `).join('');
