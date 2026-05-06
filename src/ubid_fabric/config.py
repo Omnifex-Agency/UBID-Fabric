@@ -1,7 +1,5 @@
 """UBID Fabric — Configuration (loaded from .env)"""
-
-from pydantic import BaseSettings
-
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     database_url: str = "postgresql://ubid_fabric:ubid_dev_2026@localhost:5432/ubid_fabric"
