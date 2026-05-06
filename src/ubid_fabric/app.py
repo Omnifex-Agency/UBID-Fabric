@@ -972,6 +972,39 @@ async def time_travel(ubid: str, as_of: str | None = None):
             return state
 
 
+# ═══════════════════════════════════════════════════════════════
+# Phase 7: Synthetic / Mock Endpoints (For Demonstration & Testing)
+# ═══════════════════════════════════════════════════════════════
+
+mock_system_logs = []
+
+@app.post("/mock/sws/ingest")
+async def mock_sws_ingest(request: Request):
+    """Synthetic SWS API that accepts data from UBID Fabric."""
+    payload = await request.json()
+    mock_system_logs.append({"system": "SWS", "method": "POST", "payload": payload, "timestamp": datetime.now().isoformat()})
+    return {"status": "success", "message": "SWS received canonical update."}
+
+@app.put("/mock/kspcb/update")
+async def mock_kspcb_update(request: Request):
+    """Synthetic KSPCB API that accepts data from UBID Fabric."""
+    payload = await request.json()
+    mock_system_logs.append({"system": "KSPCB", "method": "PUT", "payload": payload, "timestamp": datetime.now().isoformat()})
+    return {"status": "success", "message": "KSPCB record updated."}
+
+@app.post("/mock/labour/webhook")
+async def mock_labour_webhook(request: Request):
+    """Synthetic Labour API to simulate incoming webhooks."""
+    payload = await request.json()
+    mock_system_logs.append({"system": "LABOUR", "method": "POST", "payload": payload, "timestamp": datetime.now().isoformat()})
+    return {"status": "success", "message": "Labour webhook simulated."}
+
+@app.get("/mock/logs")
+async def get_mock_logs():
+    """View what the synthetic systems have received."""
+    return {"total_received": len(mock_system_logs), "logs": list(reversed(mock_system_logs))}
+
+
 @app.get("/")
 async def root():
     return {
