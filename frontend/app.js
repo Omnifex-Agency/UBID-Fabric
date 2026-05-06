@@ -99,6 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if(tForm) {
         tForm.addEventListener('submit', handleSaveTarget);
     }
+
+    const sandboxForm = document.getElementById('sandboxForm');
+    if(sandboxForm) {
+        sandboxForm.addEventListener('submit', handleSandboxSubmit);
+    }
 });
 
 function showTab(tabId) {
@@ -685,5 +690,87 @@ async function handleFileUpload(e) {
         document.getElementById('fileResultJson').textContent = JSON.stringify(data, null, 2);
     } catch (error) {
         alert('Upload failed: ' + error.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 6: API Sandbox (Postman-like Tester)
+// ═══════════════════════════════════════════════════════════════
+
+async function handleSandboxSubmit(e) {
+    e.preventDefault();
+    
+    const btn = document.querySelector('#sandboxForm button[type="submit"]');
+    btn.textContent = "Sending...";
+    btn.disabled = true;
+
+    const source = document.getElementById('sbSource').value;
+    const entityId = document.getElementById('sbEntityId').value;
+    const name = document.getElementById('sbName').value;
+    
+    let changes = [];
+    try {
+        changes = JSON.parse(document.getElementById('sbChanges').value);
+    } catch(err) {
+        alert("Invalid JSON in Changes array!");
+        btn.textContent = "Send Request";
+        btn.disabled = false;
+        return;
+    }
+
+    const payload = {
+        source_system: source,
+        entity_type: "FACTORY",
+        entity_id: entityId,
+        business_name: name,
+        address: "",
+        changes: changes,
+        timestamp: new Date().toISOString()
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/api/ingest/webhook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        
+        // Update Response Pane
+        document.getElementById('sbResponseArea').style.display = 'block';
+        document.getElementById('sbResponseJson').textContent = JSON.stringify(data, null, 2);
+        
+        const badge = document.getElementById('sbStatusBadge');
+        const codeText = document.getElementById('sbStatusCode');
+        const dot = badge.querySelector('.dot');
+        
+        codeText.textContent = `${response.status} ${response.ok ? 'OK' : 'Error'}`;
+        
+        if (response.ok) {
+            dot.style.background = 'var(--success)';
+            dot.style.boxShadow = '0 0 0 3px var(--success-bg)';
+        } else {
+            dot.style.background = 'var(--danger)';
+            dot.style.boxShadow = '0 0 0 3px var(--danger-bg)';
+        }
+
+        // Auto-refresh tables to show new data
+        fetchEvents();
+        fetchEvidence();
+        fetchMetrics();
+        
+    } catch (error) {
+        document.getElementById('sbResponseArea').style.display = 'block';
+        document.getElementById('sbResponseJson').textContent = error.message;
+        
+        const badge = document.getElementById('sbStatusBadge');
+        document.getElementById('sbStatusCode').textContent = "Connection Error";
+        const dot = badge.querySelector('.dot');
+        dot.style.background = 'var(--danger)';
+        dot.style.boxShadow = '0 0 0 3px var(--danger-bg)';
+    } finally {
+        btn.textContent = "Send Request";
+        btn.disabled = false;
     }
 }

@@ -26,6 +26,7 @@
                 <a href="#" onclick="showTab('dlq')">Dead Letter Queue</a>
                 <a href="#" onclick="showTab('metrics')">Metrics</a>
                 <a href="#" onclick="showTab('ingest')">File Upload</a>
+                <a href="#" onclick="showTab('sandbox')">API Sandbox</a>
             </div>
             <div class="status-indicator">
                 <div class="dot active"></div>
@@ -136,6 +137,60 @@
                                 <tr><td colspan="5" class="text-center text-muted">No evidence nodes recorded.</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- API Sandbox Tab -->
+            <div id="sandboxTab" style="display: none;">
+                <section class="content-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>API Sandbox</h2>
+                            <p class="text-muted">Simulate ingestion webhook payloads to the fabric.</p>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <!-- Request Pane -->
+                        <div class="glass-panel" style="padding: 1.5rem;">
+                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600;">Request payload</h3>
+                            <form id="sandboxForm">
+                                <div class="form-group">
+                                    <label>Source System</label>
+                                    <input type="text" id="sbSource" value="LABOUR" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Entity ID</label>
+                                    <input type="text" id="sbEntityId" value="FAC-2024-99" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Business Name</label>
+                                    <input type="text" id="sbName" value="Simulated Factory Ltd" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Changes (JSON Array)</label>
+                                    <textarea id="sbChanges" rows="5" style="font-family: monospace;">[
+  {
+    "field": "factory_name",
+    "old": "Old Factory",
+    "new": "Simulated Factory Ltd"
+  }
+]</textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%;">Send Request</button>
+                            </form>
+                        </div>
+                        <!-- Response Pane -->
+                        <div class="glass-panel" style="padding: 1.5rem; display: flex; flex-direction: column;">
+                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600;">Response</h3>
+                            <div id="sbResponseArea" style="display: none; flex-grow: 1;">
+                                <div class="status-indicator" style="display: inline-flex; margin-bottom: 1rem;" id="sbStatusBadge">
+                                    <div class="dot active"></div>
+                                    <span id="sbStatusCode">200 OK</span>
+                                </div>
+                                <pre id="sbResponseJson" class="code-block" style="height: 350px; overflow-y: auto; margin: 0;"></pre>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
