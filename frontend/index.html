@@ -15,18 +15,16 @@
     
     <div class="app-container">
         <header class="glass-panel main-header">
-            <div class="logo">
+            <div class="logo" onclick="showTab('dashboardTab')">
                 <div class="logo-icon"></div>
                 <h1>UBID Fabric <span class="tag">v0.2</span></h1>
             </div>
             <div class="nav-links">
-                <a href="#" class="active" onclick="showTab('dashboard')">Dashboard</a>
-                <a href="#" onclick="showTab('hub')">Interoperability Hub</a>
-                <a href="#" onclick="showTab('evidence')">Evidence Graph</a>
-                <a href="#" onclick="showTab('dlq')">Dead Letter Queue</a>
-                <a href="#" onclick="showTab('metrics')">Metrics</a>
-                <a href="#" onclick="showTab('ingest')">File Upload</a>
-                <a href="#" onclick="showTab('sandbox')">API Sandbox</a>
+                <a href="#" class="active" onclick="showTab('dashboardTab')">Overview</a>
+                <a href="#" onclick="showTab('hubTab')">Routing & Hub</a>
+                <a href="#" onclick="showTab('auditTab')">Audit & Metrics</a>
+                <a href="#" onclick="showTab('ingestTab')">Ingestion Tools</a>
+                <a href="#" onclick="showTab('simulatedTab')">Simulated Depts</a>
             </div>
             <div class="status-indicator">
                 <div class="dot active"></div>
@@ -35,10 +33,9 @@
         </header>
 
         <main>
-            <!-- Dashboard Tab -->
+            <!-- Overview Tab -->
             <div id="dashboardTab">
                 <div class="stats-grid" id="statsGrid">
-                    <!-- Populated by JS -->
                     <div class="stat-card glass-panel skeleton"></div>
                     <div class="stat-card glass-panel skeleton"></div>
                     <div class="stat-card glass-panel skeleton"></div>
@@ -70,10 +67,9 @@
                 </section>
             </div>
 
-            <!-- Interoperability Hub Tab -->
+            <!-- Routing & Hub Tab -->
             <div id="hubTab" style="display: none;">
                 <div class="hub-layout">
-                    <!-- Left: Ingestion -->
                     <section class="hub-column">
                         <div class="section-header">
                             <div>
@@ -82,12 +78,9 @@
                             </div>
                             <button class="btn btn-primary btn-sm" onclick="showAddConnectorModal()">+ Add Source</button>
                         </div>
-                        <div class="hub-grid" id="connectorsGrid">
-                            <!-- Populated by JS -->
-                        </div>
+                        <div class="hub-grid" id="connectorsGrid"></div>
                     </section>
 
-                    <!-- Center: Pipeline Visualization (Optional decorative / status) -->
                     <div class="hub-pipeline-visual">
                         <div class="pipeline-flow">
                             <div class="flow-line"></div>
@@ -99,7 +92,6 @@
                         </div>
                     </div>
 
-                    <!-- Right: Propagation -->
                     <section class="hub-column">
                         <div class="section-header">
                             <div>
@@ -108,96 +100,11 @@
                             </div>
                             <button class="btn btn-primary btn-sm" onclick="showAddTargetModal()">+ Add Target</button>
                         </div>
-                        <div class="hub-grid" id="targetsGrid">
-                            <!-- Populated by JS -->
-                        </div>
+                        <div class="hub-grid" id="targetsGrid"></div>
                     </section>
                 </div>
-            </div>
 
-            <!-- Evidence Graph Tab -->
-            <div id="evidenceTab" style="display: none;">
-                <section class="content-section">
-                    <div class="section-header">
-                        <h2>Causal Evidence Graph</h2>
-                        <p class="text-muted">Trace the immutable chain of custody for any record.</p>
-                    </div>
-                    <div class="glass-panel table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Node Type</th>
-                                    <th>UBID</th>
-                                    <th>Event Reference</th>
-                                    <th>Timestamp</th>
-                                    <th>Causal Payload</th>
-                                </tr>
-                            </thead>
-                            <tbody id="evidenceTableBody">
-                                <tr><td colspan="5" class="text-center text-muted">No evidence nodes recorded.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            </div>
-
-            <!-- API Sandbox Tab -->
-            <div id="sandboxTab" style="display: none;">
-                <section class="content-section">
-                    <div class="section-header">
-                        <div>
-                            <h2>API Sandbox</h2>
-                            <p class="text-muted">Simulate ingestion webhook payloads to the fabric.</p>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <!-- Request Pane -->
-                        <div class="glass-panel" style="padding: 1.5rem;">
-                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600;">Request payload</h3>
-                            <form id="sandboxForm">
-                                <div class="form-group">
-                                    <label>Source System</label>
-                                    <input type="text" id="sbSource" value="LABOUR" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Entity ID</label>
-                                    <input type="text" id="sbEntityId" value="FAC-2024-99" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Business Name</label>
-                                    <input type="text" id="sbName" value="Simulated Factory Ltd" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Changes (JSON Array)</label>
-                                    <textarea id="sbChanges" rows="5" style="font-family: monospace;">[
-  {
-    "field": "factory_name",
-    "old": "Old Factory",
-    "new": "Simulated Factory Ltd"
-  }
-]</textarea>
-                                </div>
-                                <button type="submit" class="btn btn-primary" style="width: 100%;">Send Request</button>
-                            </form>
-                        </div>
-                        <!-- Response Pane -->
-                        <div class="glass-panel" style="padding: 1.5rem; display: flex; flex-direction: column;">
-                            <h3 style="margin-bottom: 1rem; color: var(--text-main); font-weight: 600;">Response</h3>
-                            <div id="sbResponseArea" style="display: none; flex-grow: 1;">
-                                <div class="status-indicator" style="display: inline-flex; margin-bottom: 1rem;" id="sbStatusBadge">
-                                    <div class="dot active"></div>
-                                    <span id="sbStatusCode">200 OK</span>
-                                </div>
-                                <pre id="sbResponseJson" class="code-block" style="height: 350px; overflow-y: auto; margin: 0;"></pre>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-            <!-- Dead Letter Queue Tab -->
-            <div id="dlqTab" style="display: none;">
-                <section class="content-section">
+                <section class="content-section" style="margin-top: 2rem;">
                     <div class="section-header">
                         <h2>Dead Letter Queue (DLQ)</h2>
                         <p class="text-muted">Failed propagations requiring manual review or retry.</p>
@@ -222,8 +129,8 @@
                 </section>
             </div>
 
-            <!-- Metrics Tab -->
-            <div id="metricsTab" style="display: none;">
+            <!-- Audit & Metrics Tab -->
+            <div id="auditTab" style="display: none;">
                 <div class="stats-grid" id="metricsGrid">
                     <div class="stat-card glass-panel skeleton"></div>
                     <div class="stat-card glass-panel skeleton"></div>
@@ -233,36 +140,51 @@
 
                 <section class="content-section" style="margin-top: 2rem;">
                     <div class="section-header">
-                        <h2>Source System Breakdown</h2>
-                    </div>
-                    <div class="glass-panel" style="padding: 1.5rem;">
-                        <div id="sourceBreakdownChart"></div>
-                    </div>
-                </section>
-
-                <section class="content-section" style="margin-top: 2rem;">
-                    <div class="section-header">
-                        <h2>Drift Analytics</h2>
-                        <p class="text-muted">Which departments are most often out-of-sync</p>
+                        <h2>Causal Evidence Graph</h2>
+                        <p class="text-muted">Trace the immutable chain of custody for any record.</p>
                     </div>
                     <div class="glass-panel table-container">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Target System</th>
-                                    <th>DLQ Failures</th>
+                                    <th>Node Type</th>
+                                    <th>UBID</th>
+                                    <th>Event Reference</th>
+                                    <th>Timestamp</th>
+                                    <th>Causal Payload</th>
                                 </tr>
                             </thead>
-                            <tbody id="driftTableBody">
-                                <tr><td colspan="2" class="text-center text-muted">Loading drift data...</td></tr>
+                            <tbody id="evidenceTableBody">
+                                <tr><td colspan="5" class="text-center text-muted">No evidence nodes recorded.</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </section>
 
+                <div class="form-row" style="margin-top: 2rem;">
+                    <div class="glass-panel" style="flex: 1; padding: 1.5rem;">
+                        <h3>Source System Breakdown</h3>
+                        <div id="sourceBreakdownChart" style="margin-top: 1rem;"></div>
+                    </div>
+                    <div class="glass-panel" style="flex: 1; padding: 1.5rem;">
+                        <h3>Drift Analytics</h3>
+                        <div class="table-container" style="margin-top: 1rem;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Target System</th>
+                                        <th>DLQ Failures</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="driftTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <section class="content-section" style="margin-top: 2rem;">
                     <div class="section-header">
-                        <h2>Time-Travel Debugger</h2>
+                        <h2>Time-Travel & Comparison</h2>
                     </div>
                     <div class="glass-panel" style="padding: 1.5rem;">
                         <div class="form-row">
@@ -271,50 +193,27 @@
                                 <input type="text" id="ttUbid" placeholder="UBID-KA-2024-00000001">
                             </div>
                             <div class="form-group">
-                                <label>As Of (ISO DateTime)</label>
-                                <input type="text" id="ttAsOf" placeholder="2024-06-01T12:00:00 (blank = latest)">
+                                <label>Timestamp A</label>
+                                <input type="text" id="ttAsOf" placeholder="ISO DateTime">
                             </div>
-                            <div class="form-group" style="display: flex; align-items: flex-end;">
-                                <button class="btn btn-primary" onclick="runTimeTravel()">Reconstruct State</button>
+                            <div class="form-group">
+                                <label>Timestamp B (Compare)</label>
+                                <input type="text" id="snapTimeB" placeholder="Optional">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: flex-end; gap: 10px;">
+                                <button class="btn btn-secondary" onclick="runTimeTravel()">View A</button>
+                                <button class="btn btn-primary" onclick="runSnapshotCompare()">Compare A vs B</button>
                             </div>
                         </div>
                         <pre id="timeTravelOutput" class="code-block" style="margin-top: 1rem; display: none;"></pre>
-                    </div>
-                </section>
-
-                <section class="content-section" style="margin-top: 2rem;">
-                    <div class="section-header">
-                        <div>
-                            <h2>Snapshot Comparison</h2>
-                            <p class="text-muted">Compare the state of an entity across two points in time to detect drift.</p>
-                        </div>
-                    </div>
-                    <div class="glass-panel" style="padding: 1.5rem;">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>UBID</label>
-                                <input type="text" id="snapUbid" placeholder="UBID-KA-2024-00000001">
-                            </div>
-                            <div class="form-group">
-                                <label>Timestamp A (Past)</label>
-                                <input type="text" id="snapTimeA" placeholder="2024-06-01T12:00:00">
-                            </div>
-                            <div class="form-group">
-                                <label>Timestamp B (Future)</label>
-                                <input type="text" id="snapTimeB" placeholder="(blank = latest)">
-                            </div>
-                            <div class="form-group" style="display: flex; align-items: flex-end;">
-                                <button class="btn btn-primary" onclick="runSnapshotCompare()">Compare Snapshots</button>
-                            </div>
-                        </div>
                         <div id="snapshotOutput" style="display: none; margin-top: 1rem;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div>
-                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State at Timestamp A</h4>
+                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State A</h4>
                                     <pre id="snapAOutput" class="code-block" style="min-height: 200px; margin: 0;"></pre>
                                 </div>
                                 <div>
-                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State at Timestamp B</h4>
+                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State B</h4>
                                     <pre id="snapBOutput" class="code-block" style="min-height: 200px; margin: 0;"></pre>
                                 </div>
                             </div>
@@ -323,14 +222,13 @@
                 </section>
             </div>
 
-            <!-- File Upload Tab -->
+            <!-- Ingestion Tools Tab -->
             <div id="ingestTab" style="display: none;">
-                <section class="content-section">
-                    <div class="section-header">
-                        <h2>CSV File Ingestion</h2>
-                        <p class="text-muted">Upload department data dumps for batch processing.</p>
-                    </div>
-                    <div class="glass-panel" style="padding: 2rem;">
+                <div class="form-row">
+                    <section class="glass-panel" style="flex: 1; padding: 1.5rem;">
+                        <div class="section-header">
+                            <h2>CSV File Ingestion</h2>
+                        </div>
                         <form id="fileUploadForm" enctype="multipart/form-data">
                             <div class="form-row">
                                 <div class="form-group">
@@ -346,149 +244,129 @@
                                 <label>CSV File</label>
                                 <input type="file" id="csvFile" accept=".csv" required style="color: #fff;">
                             </div>
-                            <div class="form-group">
-                                <label>Field Mappings (JSON) — maps CSV columns to canonical fields</label>
-                                <textarea id="fileMappings" rows="3" placeholder='{"company_name": "business_name", "addr": "registered_address"}'>{}</textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Upload & Process</button>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">Upload & Process</button>
                         </form>
                         <div id="fileUploadResult" style="display: none; margin-top: 1.5rem;">
                             <pre id="fileResultJson" class="code-block"></pre>
+                        </div>
+                    </section>
+
+                    <section class="glass-panel" style="flex: 1; padding: 1.5rem;">
+                        <div class="section-header">
+                            <h2>API Sandbox</h2>
+                        </div>
+                        <form id="sandboxForm">
+                            <div class="form-group">
+                                <label>Source System</label>
+                                <input type="text" id="sbSource" value="LABOUR" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Entity ID</label>
+                                <input type="text" id="sbEntityId" value="FAC-2024-99" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Changes (JSON)</label>
+                                <textarea id="sbChanges" rows="3" style="font-family: monospace;">[{"field": "factory_name", "new": "Simulated Name"}]</textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">Send Webhook</button>
+                        </form>
+                        <div id="sbResponseArea" style="display: none; margin-top: 1rem;">
+                            <span id="sbStatusCode" class="tag"></span>
+                            <pre id="sbResponseJson" class="code-block" style="margin-top: 0.5rem;"></pre>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Simulated Depts Tab -->
+            <div id="simulatedTab" style="display: none;">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Simulated Department Databases</h2>
+                        <button class="btn btn-secondary btn-sm" onclick="fetchSimulatedState()">Refresh State</button>
+                    </div>
+                    <p class="text-muted" style="margin-bottom: 2rem;">These are standalone "mini-databases" inside the departments, showing what they currently hold for each UBID.</p>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+                        <!-- SWS Database -->
+                        <div class="glass-panel department-db">
+                            <div class="db-header">
+                                <div class="dept-icon sws"></div>
+                                <h3>SWS Registry</h3>
+                            </div>
+                            <div id="swsDbContent" class="db-content">
+                                <p class="text-muted text-center">No records in SWS.</p>
+                            </div>
+                        </div>
+
+                        <!-- KSPCB Database -->
+                        <div class="glass-panel department-db">
+                            <div class="db-header">
+                                <div class="dept-icon kspcb"></div>
+                                <h3>KSPCB Database</h3>
+                            </div>
+                            <div id="kspcbDbContent" class="db-content">
+                                <p class="text-muted text-center">No records in KSPCB.</p>
+                            </div>
+                        </div>
+
+                        <!-- Labour Database -->
+                        <div class="glass-panel department-db">
+                            <div class="db-header">
+                                <div class="dept-icon labour"></div>
+                                <h3>Labour Dept</h3>
+                            </div>
+                            <div id="labourDbContent" class="db-content">
+                                <p class="text-muted text-center">No records in Labour.</p>
+                            </div>
                         </div>
                     </div>
                 </section>
             </div>
         </main>
 
-        <!-- Modals -->
+        <!-- Modals (Connectors, Targets, etc.) -->
         <div id="connectorModal" class="modal">
             <div class="modal-content glass-panel">
-                <div class="modal-header">
-                    <h3>Setup Advanced Connector</h3>
-                    <div class="modal-badge">AI ASSISTED</div>
-                </div>
+                <div class="modal-header"><h3>Setup Connector</h3></div>
                 <form id="connectorForm">
-                    <div class="form-group">
-                        <label>Connector Name</label>
-                        <input type="text" id="connName" placeholder="e.g. Labour Dept Webhook" required>
-                    </div>
+                    <div class="form-group"><label>Name</label><input type="text" id="connName" required></div>
                     <div class="form-row">
-                        <div class="form-group">
-                            <label>System Type</label>
-                            <input type="text" id="connSystem" placeholder="LABOUR" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Type</label>
+                        <div class="form-group"><label>System</label><input type="text" id="connSystem" required></div>
+                        <div class="form-group"><label>Type</label>
                             <select id="connType">
-                                <option value="WEBHOOK">Webhook (Push)</option>
-                                <option value="API_POLL">API Polling (Pull)</option>
-                                <option value="CDC">CDC (DB Stream)</option>
+                                <option value="WEBHOOK">Webhook</option>
+                                <option value="API_POLL">Polling</option>
                             </select>
                         </div>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>Target URL / Endpoint</label>
-                        <div class="input-with-action">
-                            <input type="url" id="connUrl" placeholder="https://api.dept.gov.in/v1/updates">
-                            <button type="button" class="btn btn-secondary" onclick="testConnector()">Test</button>
-                        </div>
-                    </div>
-
-                    <!-- Test Results / AI Mapping Section -->
-                    <div id="testResultArea" style="display: none; margin-bottom: 1.5rem;">
-                        <div class="result-header">
-                            <span class="text-muted">Sample Data Received</span>
-                            <div>
-                                <button type="button" class="btn-text" onclick="autoMapFields()">Auto-Map with AI</button>
-                                <button type="button" class="btn-text" style="color: var(--accent); margin-left: 10px;" onclick="runDryRun()">Run Simulator</button>
-                            </div>
-                        </div>
-                        <pre id="sampleJson" class="code-block"></pre>
-                    </div>
-
-                    <!-- Simulator Output Area -->
-                    <div id="simulatorOutputArea" style="display: none; margin-bottom: 1.5rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent); padding: 1rem; border-radius: 8px;">
-                        <div class="result-header">
-                            <span style="color: var(--accent); font-weight: 600;">SIMULATED OUTPUT (Canonical Format)</span>
-                            <span class="text-muted" id="simMappingCount"></span>
-                        </div>
-                        <pre id="simulatorJson" class="code-block" style="background: transparent;"></pre>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Field Mappings (Source -> Canonical)</label>
-                        <div id="mappingList" class="mapping-list">
-                            <!-- Dynamic mapping rows -->
-                        </div>
-                        <button type="button" class="btn-text" onclick="addMappingRow()">+ Add Field Mapping</button>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Polling Interval (sec)</label>
-                            <input type="number" id="connInterval" value="60">
-                        </div>
-                        <div class="form-group">
-                            <label>Auth Token (Optional)</label>
-                            <input type="password" id="connAuth" placeholder="Bearer ...">
-                        </div>
-                    </div>
+                    <div class="form-group"><label>URL</label><input type="url" id="connUrl"></div>
                     <div class="modal-actions">
                         <button type="button" class="btn" onclick="hideConnectorModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save & Activate</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
                     </div>
                 </form>
             </div>
         </div>
 
-        <!-- Target System Modal -->
         <div id="targetModal" class="modal">
             <div class="modal-content glass-panel">
-                <div class="modal-header">
-                    <h3>Setup Target System (Sending)</h3>
-                    <div class="modal-badge">PROPAGATION</div>
-                </div>
+                <div class="modal-header"><h3>Setup Target</h3></div>
                 <form id="targetForm">
-                    <div class="form-group">
-                        <label>Target Name</label>
-                        <input type="text" id="targetName" placeholder="e.g. SWS Central Registry" required>
-                    </div>
+                    <div class="form-group"><label>Name</label><input type="text" id="tName" required></div>
                     <div class="form-row">
-                        <div class="form-group">
-                            <label>System Type (ID)</label>
-                            <input type="text" id="targetSystem" placeholder="SWS" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Method</label>
-                            <select id="targetMethod">
-                                <option value="POST">POST (Standard)</option>
-                                <option value="PUT">PUT (Idempotent)</option>
-                                <option value="PATCH">PATCH (Delta)</option>
+                        <div class="form-group"><label>System</label><input type="text" id="tSystem" required></div>
+                        <div class="form-group"><label>Method</label>
+                            <select id="tMethod">
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
                             </select>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>Base Webhook URL</label>
-                        <input type="url" id="targetUrl" placeholder="http://sws.gov.in/api/v1/ingest" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Outgoing Mappings (Canonical -> Target)</label>
-                        <div id="targetMappingList" class="mapping-list">
-                            <!-- Dynamic mapping rows -->
-                        </div>
-                        <button type="button" class="btn-text" onclick="addTargetMappingRow()">+ Add Target Mapping</button>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Auth Header (Optional)</label>
-                        <input type="password" id="targetAuth" placeholder="Bearer ...">
-                    </div>
-                    
+                    <div class="form-group"><label>URL</label><input type="url" id="tUrl" required></div>
                     <div class="modal-actions">
                         <button type="button" class="btn" onclick="hideTargetModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Target</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
                     </div>
                 </form>
             </div>

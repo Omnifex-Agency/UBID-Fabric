@@ -84,6 +84,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    cursor: pointer;
 }
 
 .logo-icon {
@@ -468,7 +469,7 @@ body {
     border-radius: var(--radius-sm);
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 0.8125rem;
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
 }
 
@@ -546,4 +547,59 @@ body {
     font-weight: 600;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
+}
+
+/* Simulated Departments Styling */
+.department-db {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.db-header {
+    padding: 1rem 1.5rem;
+    background: var(--bg-surface-hover);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.dept-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+}
+.dept-icon.sws { background: #8b5cf6; }
+.dept-icon.kspcb { background: #10b981; }
+.dept-icon.labour { background: #f59e0b; }
+
+.db-content {
+    padding: 1rem;
+    flex-grow: 1;
+    max-height: 500px;
+    overflow-y: auto;
+    background: #fafafa;
+}
+.db-record-card {
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+.record-id {
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    font-family: monospace;
+}
+.record-data {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    background: #f8fafc;
+    padding: 0.5rem;
+    border-radius: 4px;
 }

@@ -977,11 +977,18 @@ async def time_travel(ubid: str, as_of: str | None = None):
 # ═══════════════════════════════════════════════════════════════
 
 mock_system_logs = []
+mock_databases = {
+    "SWS": {},
+    "KSPCB": {},
+    "LABOUR": {}
+}
 
 @app.post("/mock/sws/ingest")
 async def mock_sws_ingest(request: Request):
     """Synthetic SWS API that accepts data from UBID Fabric."""
     payload = await request.json()
+    record_id = payload.get("ubid") or payload.get("entity_name") or "unknown"
+    mock_databases["SWS"][record_id] = payload
     mock_system_logs.append({"system": "SWS", "method": "POST", "payload": payload, "timestamp": datetime.now().isoformat()})
     return {"status": "success", "message": "SWS received canonical update."}
 
@@ -989,6 +996,8 @@ async def mock_sws_ingest(request: Request):
 async def mock_kspcb_update(request: Request):
     """Synthetic KSPCB API that accepts data from UBID Fabric."""
     payload = await request.json()
+    record_id = payload.get("ubid") or payload.get("company_name") or "unknown"
+    mock_databases["KSPCB"][record_id] = payload
     mock_system_logs.append({"system": "KSPCB", "method": "PUT", "payload": payload, "timestamp": datetime.now().isoformat()})
     return {"status": "success", "message": "KSPCB record updated."}
 
@@ -996,6 +1005,8 @@ async def mock_kspcb_update(request: Request):
 async def mock_labour_webhook(request: Request):
     """Synthetic Labour API to simulate incoming webhooks."""
     payload = await request.json()
+    record_id = payload.get("entity_id") or payload.get("business_name") or "unknown"
+    mock_databases["LABOUR"][record_id] = payload
     mock_system_logs.append({"system": "LABOUR", "method": "POST", "payload": payload, "timestamp": datetime.now().isoformat()})
     return {"status": "success", "message": "Labour webhook simulated."}
 
@@ -1003,6 +1014,11 @@ async def mock_labour_webhook(request: Request):
 async def get_mock_logs():
     """View what the synthetic systems have received."""
     return {"total_received": len(mock_system_logs), "logs": list(reversed(mock_system_logs))}
+
+@app.get("/mock/state")
+async def get_mock_state():
+    """View the current mock databases for all synthetic systems."""
+    return mock_databases
 
 
 @app.get("/")
