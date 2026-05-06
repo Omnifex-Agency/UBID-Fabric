@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS ubid_registry (
     registration_date DATE,
     business_type   VARCHAR(50),
     system_ids      JSONB NOT NULL DEFAULT '{}',
+    metadata        JSONB NOT NULL DEFAULT '{}', -- For dynamic schema extensions
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -107,6 +107,8 @@ function showTab(tabId) {
     document.getElementById('hubTab').style.display = 'none';
     document.getElementById('evidenceTab').style.display = 'none';
     document.getElementById('dlqTab').style.display = 'none';
+    document.getElementById('metricsTab').style.display = 'none';
+    document.getElementById('ingestTab').style.display = 'none';
     
     // Show selected tab
     document.getElementById(`${tabId}Tab`).style.display = 'block';
@@ -124,6 +126,10 @@ function showTab(tabId) {
     if(tabId === 'hub') {
         fetchConnectors();
         fetchTargets();
+    }
+    if(tabId === 'metrics') {
+        fetchMetrics();
+        fetchDriftAnalytics();
     }
 }
 
@@ -480,6 +486,43 @@ async function autoMapFields() {
     }
 }
 
+async function runDryRun() {
+    if(!window.currentSample) {
+        alert("Please test the connector first to get sample data.");
+        return;
+    }
+
+    // Collect current mappings from the UI
+    const mappings = {};
+    document.querySelectorAll('#mappingList .mapping-row').forEach(row => {
+        const source = row.querySelector('.mapping-source').value;
+        const target = row.querySelector('.mapping-target').value;
+        if(source && target) mappings[source] = target;
+    });
+
+    const payload = {
+        source_data: window.currentSample,
+        field_mappings: mappings
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/api/simulator/dry-run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        
+        if(data.status === 'success') {
+            document.getElementById('simulatorOutputArea').style.display = 'block';
+            document.getElementById('simulatorJson').textContent = JSON.stringify(data.transformed_data, null, 2);
+            document.getElementById('simMappingCount').textContent = `${data.mapping_count} fields matched`;
+        }
+    } catch (error) {
+        alert("Simulator Error");
+    }
+}
+
 function addMappingRow(source = '', target = '') {
     const row = document.createElement('div');
     row.className = 'mapping-row';
@@ -501,5 +544,145 @@ async function deleteConnector(id) {
     if(confirm('Are you sure you want to delete this connector?')) {
         await fetch(`${API_BASE}/api/connectors/${id}`, { method: 'DELETE' });
         fetchConnectors();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 5: Metrics & Observability
+// ═══════════════════════════════════════════════════════════════
+
+async function fetchMetrics() {
+    try {
+        const response = await fetch(`${API_BASE}/api/metrics`);
+        const data = await response.json();
+
+        const grid = document.getElementById('metricsGrid');
+        grid.innerHTML = `
+            <div class="stat-card glass-panel">
+                <div class="stat-title">Events (Last Hour)</div>
+                <div class="stat-value">${data.events_last_hour}</div>
+            </div>
+            <div class="stat-card glass-panel">
+                <div class="stat-title">DLQ Depth</div>
+                <div class="stat-value" style="color: ${data.dlq_depth > 0 ? 'var(--danger)' : 'var(--success)'}">${data.dlq_depth}</div>
+            </div>
+            <div class="stat-card glass-panel">
+                <div class="stat-title">Conflicts (24h)</div>
+                <div class="stat-value">${data.conflicts_24h}</div>
+            </div>
+            <div class="stat-card glass-panel">
+                <div class="stat-title">Propagation Success</div>
+                <div class="stat-value" style="color: ${data.propagation_success_rate >= 95 ? 'var(--success)' : 'var(--danger)'}">${data.propagation_success_rate}%</div>
+            </div>
+        `;
+
+        // Source breakdown chart (simple bar visualization)
+        const chart = document.getElementById('sourceBreakdownChart');
+        if (data.source_breakdown.length === 0) {
+            chart.innerHTML = '<p class="text-muted">No events recorded yet.</p>';
+            return;
+        }
+        const maxEvents = Math.max(...data.source_breakdown.map(s => s.events));
+        chart.innerHTML = data.source_breakdown.map(s => `
+            <div style="display: flex; align-items: center; margin-bottom: 0.8rem; gap: 1rem;">
+                <span style="min-width: 140px; font-weight: 600; color: #fff;">${s.system}</span>
+                <div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                    <div style="width: ${(s.events / maxEvents) * 100}%; background: linear-gradient(90deg, var(--accent), #8b5cf6); padding: 0.4rem 0.8rem; color: #fff; font-size: 0.85rem; border-radius: 4px;">
+                        ${s.events} events
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error("Failed to fetch metrics:", error);
+    }
+}
+
+async function fetchDriftAnalytics() {
+    try {
+        const response = await fetch(`${API_BASE}/api/metrics/drift`);
+        const data = await response.json();
+
+        const tbody = document.getElementById('driftTableBody');
+        tbody.innerHTML = '';
+
+        if (data.dlq_failures_by_system.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No drift detected. All systems in sync!</td></tr>';
+            return;
+        }
+
+        data.dlq_failures_by_system.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${item.system}</strong></td>
+                <td><span class="badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">${item.failures} failures</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error("Failed to fetch drift analytics:", error);
+    }
+}
+
+async function runTimeTravel() {
+    const ubid = document.getElementById('ttUbid').value;
+    const asOf = document.getElementById('ttAsOf').value;
+
+    if (!ubid) {
+        alert('Please enter a UBID.');
+        return;
+    }
+
+    let url = `${API_BASE}/api/metrics/time-travel/${ubid}`;
+    if (asOf) url += `?as_of=${encodeURIComponent(asOf)}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        const output = document.getElementById('timeTravelOutput');
+        output.style.display = 'block';
+        output.textContent = JSON.stringify(data, null, 2);
+    } catch (error) {
+        alert('Time-Travel failed: ' + error.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 3: CSV File Upload
+// ═══════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+    const uploadForm = document.getElementById('fileUploadForm');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', handleFileUpload);
+    }
+});
+
+async function handleFileUpload(e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById('csvFile');
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('source_system', document.getElementById('fileSource').value);
+    formData.append('entity_type', document.getElementById('fileEntityType').value);
+    formData.append('field_mappings', document.getElementById('fileMappings').value);
+
+    try {
+        const response = await fetch(`${API_BASE}/api/ingest/file`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        document.getElementById('fileUploadResult').style.display = 'block';
+        document.getElementById('fileResultJson').textContent = JSON.stringify(data, null, 2);
+    } catch (error) {
+        alert('Upload failed: ' + error.message);
     }
 }

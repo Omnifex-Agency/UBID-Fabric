@@ -17,13 +17,15 @@
         <header class="glass-panel main-header">
             <div class="logo">
                 <div class="logo-icon"></div>
-                <h1>UBID Fabric <span class="tag">PROTOTYPE</span></h1>
+                <h1>UBID Fabric <span class="tag">v0.2</span></h1>
             </div>
             <div class="nav-links">
                 <a href="#" class="active" onclick="showTab('dashboard')">Dashboard</a>
                 <a href="#" onclick="showTab('hub')">Interoperability Hub</a>
                 <a href="#" onclick="showTab('evidence')">Evidence Graph</a>
                 <a href="#" onclick="showTab('dlq')">Dead Letter Queue</a>
+                <a href="#" onclick="showTab('metrics')">Metrics</a>
+                <a href="#" onclick="showTab('ingest')">File Upload</a>
             </div>
             <div class="status-indicator">
                 <div class="dot active"></div>
@@ -164,6 +166,103 @@
                     </div>
                 </section>
             </div>
+
+            <!-- Metrics Tab -->
+            <div id="metricsTab" style="display: none;">
+                <div class="stats-grid" id="metricsGrid">
+                    <div class="stat-card glass-panel skeleton"></div>
+                    <div class="stat-card glass-panel skeleton"></div>
+                    <div class="stat-card glass-panel skeleton"></div>
+                    <div class="stat-card glass-panel skeleton"></div>
+                </div>
+
+                <section class="content-section" style="margin-top: 2rem;">
+                    <div class="section-header">
+                        <h2>Source System Breakdown</h2>
+                    </div>
+                    <div class="glass-panel" style="padding: 1.5rem;">
+                        <div id="sourceBreakdownChart"></div>
+                    </div>
+                </section>
+
+                <section class="content-section" style="margin-top: 2rem;">
+                    <div class="section-header">
+                        <h2>Drift Analytics</h2>
+                        <p class="text-muted">Which departments are most often out-of-sync</p>
+                    </div>
+                    <div class="glass-panel table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Target System</th>
+                                    <th>DLQ Failures</th>
+                                </tr>
+                            </thead>
+                            <tbody id="driftTableBody">
+                                <tr><td colspan="2" class="text-center text-muted">Loading drift data...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="content-section" style="margin-top: 2rem;">
+                    <div class="section-header">
+                        <h2>Time-Travel Debugger</h2>
+                    </div>
+                    <div class="glass-panel" style="padding: 1.5rem;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>UBID</label>
+                                <input type="text" id="ttUbid" placeholder="UBID-KA-2024-00000001">
+                            </div>
+                            <div class="form-group">
+                                <label>As Of (ISO DateTime)</label>
+                                <input type="text" id="ttAsOf" placeholder="2024-06-01T12:00:00 (blank = latest)">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: flex-end;">
+                                <button class="btn btn-primary" onclick="runTimeTravel()">Reconstruct State</button>
+                            </div>
+                        </div>
+                        <pre id="timeTravelOutput" class="code-block" style="margin-top: 1rem; display: none;"></pre>
+                    </div>
+                </section>
+            </div>
+
+            <!-- File Upload Tab -->
+            <div id="ingestTab" style="display: none;">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>CSV File Ingestion</h2>
+                        <p class="text-muted">Upload department data dumps for batch processing.</p>
+                    </div>
+                    <div class="glass-panel" style="padding: 2rem;">
+                        <form id="fileUploadForm" enctype="multipart/form-data">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Source System</label>
+                                    <input type="text" id="fileSource" placeholder="LABOUR" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Entity Type</label>
+                                    <input type="text" id="fileEntityType" value="business">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>CSV File</label>
+                                <input type="file" id="csvFile" accept=".csv" required style="color: #fff;">
+                            </div>
+                            <div class="form-group">
+                                <label>Field Mappings (JSON) — maps CSV columns to canonical fields</label>
+                                <textarea id="fileMappings" rows="3" placeholder='{"company_name": "business_name", "addr": "registered_address"}'>{}</textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Upload & Process</button>
+                        </form>
+                        <div id="fileUploadResult" style="display: none; margin-top: 1.5rem;">
+                            <pre id="fileResultJson" class="code-block"></pre>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </main>
 
         <!-- Modals -->
@@ -205,9 +304,21 @@
                     <div id="testResultArea" style="display: none; margin-bottom: 1.5rem;">
                         <div class="result-header">
                             <span class="text-muted">Sample Data Received</span>
-                            <button type="button" class="btn-text" onclick="autoMapFields()">Auto-Map with AI</button>
+                            <div>
+                                <button type="button" class="btn-text" onclick="autoMapFields()">Auto-Map with AI</button>
+                                <button type="button" class="btn-text" style="color: var(--accent); margin-left: 10px;" onclick="runDryRun()">Run Simulator</button>
+                            </div>
                         </div>
                         <pre id="sampleJson" class="code-block"></pre>
+                    </div>
+
+                    <!-- Simulator Output Area -->
+                    <div id="simulatorOutputArea" style="display: none; margin-bottom: 1.5rem; background: rgba(59, 130, 246, 0.05); border: 1px dashed var(--accent); padding: 1rem; border-radius: 8px;">
+                        <div class="result-header">
+                            <span style="color: var(--accent); font-weight: 600;">SIMULATED OUTPUT (Canonical Format)</span>
+                            <span class="text-muted" id="simMappingCount"></span>
+                        </div>
+                        <pre id="simulatorJson" class="code-block" style="background: transparent;"></pre>
                     </div>
 
                     <div class="form-group">

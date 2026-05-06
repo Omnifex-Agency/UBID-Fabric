@@ -25,21 +25,47 @@ class AIService:
     async def get_mapping_suggestion(self, source_json: Dict[str, Any], target_json: Dict[str, Any]) -> str:
         """
         Asks the AI to suggest a mapping between two JSON schemas.
+        Ensures PII is scrambled before sending to hosted providers.
         """
+        scrambled_source = self._scramble_pii(source_json)
+        scrambled_target = self._scramble_pii(target_json)
+
         prompt = f"""
-        Act as a Data Engineer. Suggest a field mapping between these two JSON objects:
+        Act as a Data Engineer. Suggest a field mapping between these two JSON schemas.
         
-        SOURCE SYSTEM DATA:
-        {source_json}
+        CRITICAL: The values below are SYNTHETIC/SCRAMBLED to protect privacy. 
+        Focus on Key Names, Nesting Structure, and Data Formats.
         
-        TARGET SYSTEM DATA:
-        {target_json}
+        SOURCE SYSTEM SCHEMA (Synthetic Samples):
+        {scrambled_source}
         
-        Return a Python dictionary mapping the source field names to target field names.
-        Identify any fields that need transformations (like dates or uppercase).
+        TARGET SYSTEM SCHEMA (Synthetic Samples):
+        {scrambled_target}
+        
+        Return a JSON object mapping the source field names to target field names.
+        Example format: {{"source_key": "target_key"}}
         """
         
         return await self._call_llm(prompt)
+
+    def _scramble_pii(self, data: Any) -> Any:
+        """
+        Recursively scrambles values in a JSON-like structure to prevent PII exposure.
+        Replaces actual values with synthetic placeholders while preserving types.
+        """
+        if isinstance(data, dict):
+            return {k: self._scramble_pii(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._scramble_pii(i) for i in data[:2]]  # Only send top 2 samples
+        elif isinstance(data, str):
+            # Check if it looks like an ID, Date, or Name
+            if len(data) > 20: return "Synthetic_Long_String"
+            return "Synthetic_String"
+        elif isinstance(data, (int, float)):
+            return 999  # Generic number
+        elif isinstance(data, bool):
+            return data
+        return None
 
     async def _call_llm(self, prompt: str) -> str:
         """

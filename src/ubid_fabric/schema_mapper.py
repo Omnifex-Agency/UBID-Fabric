@@ -32,6 +32,15 @@ class TransformationRules:
         return value.upper() if isinstance(value, str) else value
 
     @staticmethod
+    def lowercase(value: str) -> str:
+        return value.lower() if isinstance(value, str) else value
+
+    @staticmethod
+    def concat(*args: Any) -> str:
+        """Concatenate multiple values with a space separator."""
+        return " ".join(str(a) for a in args if a is not None)
+
+    @staticmethod
     def extract_pincode(address: str) -> str:
         """Extract a 6-digit Indian PIN code from an address string."""
         if not address:
@@ -39,6 +48,28 @@ class TransformationRules:
         import re
         match = re.search(r'\b\d{6}\b', address)
         return match.group(0) if match else ""
+
+    @staticmethod
+    def conditional_status(value: Any) -> str:
+        """Map heterogeneous status codes to standard 'ACTIVE'/'INACTIVE'."""
+        mapping = {
+            "A": "ACTIVE", "1": "ACTIVE", "LIVE": "ACTIVE", "OPEN": "ACTIVE",
+            "I": "INACTIVE", "0": "INACTIVE", "CLOSED": "INACTIVE", "REJECTED": "INACTIVE"
+        }
+        val_str = str(value).upper().strip()
+        return mapping.get(val_str, "PENDING")
+
+    @staticmethod
+    def format_phone(value: str) -> str:
+        """Normalize phone numbers to +91-XXXXXXXXXX format."""
+        if not value: return ""
+        import re
+        digits = re.sub(r'\D', '', value)
+        if len(digits) == 10:
+            return f"+91-{digits}"
+        elif len(digits) == 12 and digits.startswith("91"):
+            return f"+91-{digits[2:]}"
+        return value
 
 
 class SchemaMapper:
@@ -50,21 +81,24 @@ class SchemaMapper:
     # In production, these mappings are fetched from PostgreSQL `schema_mappings`
     MAPPINGS = {
         "FACTORIES": {
-            "business_name": {"target_field": "factory_name", "transform": TransformationRules.uppercase},
-            "registered_address": {"target_field": "factory_address", "transform": None},
-            "registration_date": {"target_field": "established_date", "transform": TransformationRules.date_iso_to_dd_mm_yyyy},
+            "business_name": {"target_field": "factory_name", "transform": "uppercase"},
+            "registration_date": {"target_field": "established_date", "transform": "date_iso_to_dd_mm_yyyy"},
+            "licence_status": {"target_field": "status", "transform": "conditional_status"}
         },
         "SHOP_ESTABLISHMENT": {
             "business_name": {"target_field": "shop_title", "transform": None},
             "registered_address": {"target_field": "address_line_1", "transform": None},
-            # Map pincode dynamically from the registered address
-            "pincode_extraction": {
+            "pincode": {
                 "source_field": "registered_address",
                 "target_field": "postal_code",
-                "transform": TransformationRules.extract_pincode
+                "transform": "extract_pincode"
             }
         }
     }
+
+    def _get_transform(self, name: str | None) -> Callable | None:
+        if not name: return None
+        return getattr(TransformationRules, name, None)
 
     def map_event_for_target(self, target_system: str, event: CanonicalEvent) -> Dict[str, Any]:
         """
@@ -100,10 +134,13 @@ class SchemaMapper:
                 rule = mapping_def[fc.field_name]
                 new_val = fc.new_value
                 
-                # Apply transformation if one exists
-                if rule.get("transform") and new_val:
+                # Apply transformation
+                transform_name = rule.get("transform")
+                transform_func = self._get_transform(transform_name)
+                
+                if transform_func and new_val:
                     try:
-                        new_val = rule["transform"](new_val)
+                        new_val = transform_func(new_val)
                     except Exception as e:
                         logger.warning("schema_transform_failed", field=fc.field_name, error=str(e))
                 
@@ -119,19 +156,20 @@ class SchemaMapper:
                     "value": fc.new_value
                 })
 
-        # Process derived mappings (e.g. extracting a pincode from the address)
+        # Process derived mappings
         for rule_name, rule in mapping_def.items():
             if isinstance(rule, dict) and "source_field" in rule:
                 source_field = rule["source_field"]
-                # Find if the source field was changed in this event
                 source_change = next((fc for fc in event.field_changes if fc.field_name == source_field), None)
                 if source_change and source_change.new_value:
                     try:
-                        derived_val = rule["transform"](source_change.new_value)
-                        mapped_changes.append({
-                            "field": rule["target_field"],
-                            "value": derived_val
-                        })
+                        transform_func = self._get_transform(rule.get("transform"))
+                        if transform_func:
+                            derived_val = transform_func(source_change.new_value)
+                            mapped_changes.append({
+                                "field": rule["target_field"],
+                                "value": derived_val
+                            })
                     except Exception as e:
                         logger.warning("derived_schema_transform_failed", rule=rule_name, error=str(e))
 
