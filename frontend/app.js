@@ -655,6 +655,46 @@ async function runTimeTravel() {
     }
 }
 
+async function runSnapshotCompare() {
+    const ubid = document.getElementById('snapUbid').value;
+    const timeA = document.getElementById('snapTimeA').value;
+    const timeB = document.getElementById('snapTimeB').value;
+
+    if (!ubid) {
+        alert('Please enter a UBID.');
+        return;
+    }
+
+    const btn = document.querySelector('button[onclick="runSnapshotCompare()"]');
+    btn.textContent = "Comparing...";
+    btn.disabled = true;
+
+    let urlA = `${API_BASE}/api/metrics/time-travel/${ubid}`;
+    if (timeA) urlA += `?as_of=${encodeURIComponent(timeA)}`;
+    
+    let urlB = `${API_BASE}/api/metrics/time-travel/${ubid}`;
+    if (timeB) urlB += `?as_of=${encodeURIComponent(timeB)}`;
+
+    try {
+        const [resA, resB] = await Promise.all([
+            fetch(urlA),
+            fetch(urlB)
+        ]);
+
+        const dataA = await resA.json();
+        const dataB = await resB.json();
+
+        document.getElementById('snapshotOutput').style.display = 'block';
+        document.getElementById('snapAOutput').textContent = JSON.stringify(dataA, null, 2);
+        document.getElementById('snapBOutput').textContent = JSON.stringify(dataB, null, 2);
+    } catch (error) {
+        alert('Snapshot Comparison failed: ' + error.message);
+    } finally {
+        btn.textContent = "Compare Snapshots";
+        btn.disabled = false;
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Phase 3: CSV File Upload
 // ═══════════════════════════════════════════════════════════════

@@ -281,6 +281,46 @@
                         <pre id="timeTravelOutput" class="code-block" style="margin-top: 1rem; display: none;"></pre>
                     </div>
                 </section>
+
+                <section class="content-section" style="margin-top: 2rem;">
+                    <div class="section-header">
+                        <div>
+                            <h2>Snapshot Comparison</h2>
+                            <p class="text-muted">Compare the state of an entity across two points in time to detect drift.</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel" style="padding: 1.5rem;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>UBID</label>
+                                <input type="text" id="snapUbid" placeholder="UBID-KA-2024-00000001">
+                            </div>
+                            <div class="form-group">
+                                <label>Timestamp A (Past)</label>
+                                <input type="text" id="snapTimeA" placeholder="2024-06-01T12:00:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Timestamp B (Future)</label>
+                                <input type="text" id="snapTimeB" placeholder="(blank = latest)">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: flex-end;">
+                                <button class="btn btn-primary" onclick="runSnapshotCompare()">Compare Snapshots</button>
+                            </div>
+                        </div>
+                        <div id="snapshotOutput" style="display: none; margin-top: 1rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div>
+                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State at Timestamp A</h4>
+                                    <pre id="snapAOutput" class="code-block" style="min-height: 200px; margin: 0;"></pre>
+                                </div>
+                                <div>
+                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State at Timestamp B</h4>
+                                    <pre id="snapBOutput" class="code-block" style="min-height: 200px; margin: 0;"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
 
             <!-- File Upload Tab -->
