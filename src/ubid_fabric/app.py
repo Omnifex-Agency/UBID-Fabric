@@ -76,6 +76,7 @@ class WebhookPayload(BaseModel):
     address: str = ""
     changes: list[dict]  # [{"field": "...", "old": ..., "new": ...}]
     timestamp: str | None = None
+    ubid: str | None = None  # Optional direct UBID hint
 
     class Config:
         extra = "allow"
@@ -114,6 +115,7 @@ async def ingest_webhook(payload: WebhookPayload):
         raw,
         business_name=payload.business_name,
         address=payload.address,
+        ubid=payload.ubid
     )
 
     return result

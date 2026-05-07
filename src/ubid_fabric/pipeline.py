@@ -45,7 +45,7 @@ class Pipeline:
         self.mapper = SchemaMapper()
 
     async def process(self, raw: RawChange, business_name: str = "",
-                address: str = "") -> dict:
+                address: str = "", ubid: str | None = None) -> dict:
         """
         Process a single RawChange through the full pipeline.
         Returns processing result summary.
@@ -70,6 +70,7 @@ class Pipeline:
                 source_system=raw.source_system,
                 business_name=business_name,
                 address=address,
+                ubid=ubid,
             )
 
             result["ubid"] = resolution.ubid

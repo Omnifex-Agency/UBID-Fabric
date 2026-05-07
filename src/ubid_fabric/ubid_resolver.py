@@ -90,8 +90,19 @@ class UBIDResolver:
     """
 
     def resolve(self, entity_id: str, source_system: str,
-                business_name: str = "", address: str = "") -> UBIDResolution:
+                business_name: str = "", address: str = "",
+                ubid: str | None = None) -> UBIDResolution:
         """Resolve UBID for a source entity."""
+
+        # Step 0: Direct UBID hint provided
+        if ubid:
+            logger.info("ubid_resolved_via_direct_hint", ubid=ubid, entity_id=entity_id)
+            return UBIDResolution(
+                ubid=ubid,
+                state=UBIDConfidence.HIGH_CONFIDENCE,
+                confidence=1.0,
+                reason="Direct UBID provided in request payload"
+            )
 
         # Step 1: Exact match via system_ids
         record = self._lookup_by_system_id(entity_id, source_system)

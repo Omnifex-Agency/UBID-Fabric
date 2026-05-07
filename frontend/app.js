@@ -270,6 +270,7 @@ async function handleSandboxSubmit(e) {
     e.preventDefault();
     const payload = {
         source_system: document.getElementById('sbSource').value,
+        ubid: document.getElementById('sbUbid').value || null,
         entity_type: "FACTORY",
         entity_id: document.getElementById('sbEntityId').value,
         changes: JSON.parse(document.getElementById('sbChanges').value),

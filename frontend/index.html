@@ -236,17 +236,23 @@
                             <h2>API Sandbox</h2>
                         </div>
                         <form id="sandboxForm">
-                            <div class="form-group">
-                                <label>Source System</label>
-                                <input type="text" id="sbSource" value="LABOUR" required>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Source System</label>
+                                    <input type="text" id="sbSource" value="LABOUR" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Direct UBID (Optional)</label>
+                                    <input type="text" id="sbUbid" placeholder="UBID-KA-2024-...">
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Entity ID</label>
-                                <input type="text" id="sbEntityId" value="FAC-2024-99" required>
+                                <input type="text" id="sbEntityId" value="LAB-4001" required>
                             </div>
                             <div class="form-group">
                                 <label>Changes (JSON)</label>
-                                <textarea id="sbChanges" rows="3" class="mono-input">[{"field": "factory_name", "new": "Simulated Name"}]</textarea>
+                                <textarea id="sbChanges" rows="3" class="mono-input">[{"field": "registered_address", "new": "New Address via Sandbox"}]</textarea>
                             </div>
                             <button type="submit" class="btn btn-primary btn-full">Send Webhook</button>
                         </form>
