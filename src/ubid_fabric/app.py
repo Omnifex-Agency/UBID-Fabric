@@ -22,11 +22,15 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ubid_fabric.config import settings
-from ubid_fabric.db import close_all
+from ubid_fabric.db import close_all, get_pg_connection, get_redis
 from ubid_fabric.event_store import EventStore
 from ubid_fabric.evidence_graph import EvidenceGraph
 from ubid_fabric.models import (
     CaptureMethod, FieldChange, RawChange, UBIDRecord,
+    Connector, ConnectorConfig, TargetSystem,
+    CanonicalFieldChange, EventCausality, EventMetadata, 
+    UBIDConfidence, EventType, CanonicalEvent,
+    EvidenceNode, EvidenceEdgeType, EvidenceNodeType
 )
 from ubid_fabric.pipeline import Pipeline
 from ubid_fabric.ubid_resolver import UBIDResolver
@@ -263,12 +267,6 @@ async def retry_dlq(dlq_id: int):
                 if isinstance(field_changes_data, str):
                     field_changes_data = json.loads(field_changes_data)
                 
-                from ubid_fabric.models import (
-                    CanonicalFieldChange, EventCausality, EventMetadata, 
-                    UBIDConfidence, EventType, CanonicalEvent,
-                    EvidenceNode, EvidenceEdgeType, EvidenceNodeType
-                )
-                
                 # Reconstruct CanonicalEvent
                 event = CanonicalEvent(
                     event_id=raw_event["event_id"],
@@ -344,9 +342,6 @@ async def suggest_mapping(payload: AIMappingPayload):
 # ═══════════════════════════════════════════════════════════════
 # Dynamic Connector Management Endpoints
 # ═══════════════════════════════════════════════════════════════
-
-from ubid_fabric.models import Connector, ConnectorConfig, TargetSystem
-from ubid_fabric.db import get_pg_connection
 
 @app.get("/api/connectors")
 async def list_connectors():
@@ -590,7 +585,6 @@ async def mock_labour_webhook(payload: dict):
 async def system_status():
     """System health check."""
     try:
-        from ubid_fabric.db import get_redis, get_pg_connection
         # Check PostgreSQL
         with get_pg_connection() as conn:
             with conn.cursor() as cur:

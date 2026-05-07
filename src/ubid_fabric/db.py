@@ -79,8 +79,8 @@ class SimplePGPool:
         }
         self.use_mock = False
         try:
-            # Test connection
-            conn = pg8000.dbapi.connect(**self.config)
+            # Test connection with a short timeout
+            conn = pg8000.dbapi.connect(**self.config, timeout=5)
             conn.close()
             logger.info("pg_pool_initialized", host=self.config["host"])
         except Exception as e:
