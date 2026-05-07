@@ -628,6 +628,21 @@ class CustomFieldPayload(BaseModel):
     enum_values: list[str] = []
     required: bool = False
 
+@app.get("/api/registry/{ubid}")
+async def get_ubid_details(ubid: str):
+    """Get full details for a UBID, including registry info and current state."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM ubid_registry WHERE ubid = %s", (ubid,))
+            record = cur.fetchone()
+            if not record:
+                raise HTTPException(status_code=404, detail="UBID not found")
+            
+            return jsonable_encoder({
+                "record": record,
+                "mock_state": {system: db.get(ubid) for system, db in mock_databases.items() if ubid in db}
+            })
+
 @app.get("/api/schema/custom-fields")
 async def list_custom_fields():
     """List all custom UBID registry fields defined by administrators."""

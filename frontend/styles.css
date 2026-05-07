@@ -842,3 +842,122 @@ main {
         grid-template-columns: 1fr;
     }
 }
+
+/* Identity Hub & UBID Explorer */
+.search-box {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    width: 100%;
+    max-width: 500px;
+}
+
+.search-box input {
+    flex-grow: 1;
+    border: none;
+    background: transparent;
+    padding: 0.5rem;
+    font-size: 1rem;
+    outline: none;
+}
+
+.identity-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.identity-card {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.identity-card.main-id {
+    border-top: 4px solid var(--success);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.id-meta {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.meta-item label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.meta-item span {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--primary);
+}
+
+.id-address p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+.system-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.lineage-tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+}
+
+.lineage-node {
+    background: white;
+    border: 1px solid var(--border-light);
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius-md);
+    text-align: center;
+    width: 100%;
+    box-shadow: var(--shadow-sm);
+}
+
+.node-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--primary);
+}
+
+.node-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.lineage-arrow {
+    color: var(--border-light);
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.comparison-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}

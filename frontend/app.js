@@ -95,10 +95,79 @@ function showTab(tabId) {
     });
 
     // Refresh tab data
+    if(tabId === 'identityTab') { /* Data loaded via search */ }
     if(tabId === 'dashboardTab') { fetchEvents(); fetchStatus(); }
     if(tabId === 'hubTab') { fetchNodes(); fetchDLQ(); }
     if(tabId === 'auditTab') { fetchEvidence(); fetchMetrics(); fetchDriftAnalytics(); }
     if(tabId === 'simulatedTab') { fetchSimulatedState(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 2.1: Identity Hub (UBID Explorer)
+// ═══════════════════════════════════════════════════════════════
+
+async function searchUbid() {
+    const ubid = document.getElementById('globalUbidSearch').value.trim();
+    if(!ubid) return;
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/registry/${ubid}`);
+        if(!res.ok) {
+            alert("UBID not found");
+            return;
+        }
+        const data = await res.json();
+        populateIdentityView(data);
+    } catch(e) {
+        alert("Search failed");
+    }
+}
+
+function populateIdentityView(data) {
+    const { record, mock_state } = data;
+    document.getElementById('ubidDetailsArea').style.display = 'block';
+    
+    document.getElementById('idBizName').textContent = record.business_name;
+    document.getElementById('idUbid').textContent = record.ubid;
+    document.getElementById('idType').textContent = record.business_type || 'N/A';
+    document.getElementById('idRegDate').textContent = record.registration_date || 'N/A';
+    document.getElementById('idAddress').textContent = record.registered_address;
+    
+    const systemList = document.getElementById('idSystemList');
+    systemList.innerHTML = '';
+    
+    // System Footprint
+    Object.keys(mock_state).forEach(system => {
+        const span = document.createElement('span');
+        span.className = 'badge';
+        span.style.background = 'rgba(100, 200, 255, 0.1)';
+        span.style.color = '#70d6ff';
+        span.textContent = system;
+        systemList.appendChild(span);
+    });
+
+    // Cross-Dept Comparison
+    const comparison = document.getElementById('idComparison');
+    comparison.innerHTML = Object.entries(mock_state).map(([system, state]) => `
+        <div class="glass-panel panel-card" style="margin-bottom: 1rem; border-left: 4px solid var(--accent);">
+            <h4 style="margin-bottom: 0.5rem; color: var(--accent);">${system} View</h4>
+            <pre class="record-data">${JSON.stringify(state, null, 2)}</pre>
+        </div>
+    `).join('');
+
+    // Lineage (Simplified for demo)
+    const lineage = document.getElementById('idLineage');
+    lineage.innerHTML = `
+        <div class="lineage-node">
+            <div class="node-label">Registry Creation</div>
+            <div class="node-time">${record.registration_date || 'Initial Seed'}</div>
+        </div>
+        <div class="lineage-arrow">↓</div>
+        <div class="lineage-node">
+            <div class="node-label">Network Ingress Active</div>
+            <div class="node-time">${new Date().toLocaleDateString()}</div>
+        </div>
+    `;
 }
 
 // ═══════════════════════════════════════════════════════════════

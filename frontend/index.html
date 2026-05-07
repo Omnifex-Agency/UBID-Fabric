@@ -17,11 +17,12 @@
                 <h1>UBID Fabric <span class="tag">v0.2</span></h1>
             </div>
             <div class="nav-links">
-                <button type="button" class="active" onclick="showTab('dashboardTab')">Overview</button>
-                <button type="button" onclick="showTab('hubTab')">Routing & Hub</button>
-                <button type="button" onclick="showTab('auditTab')">Audit & Metrics</button>
-                <button type="button" onclick="showTab('ingestTab')">Ingestion Tools</button>
-                <button type="button" onclick="showTab('simulatedTab')">Simulated Depts</button>
+                <button type="button" class="active" onclick="showTab('identityTab')">Identity Hub</button>
+                <button type="button" onclick="showTab('dashboardTab')">Events & Health</button>
+                <button type="button" onclick="showTab('hubTab')">Network Nodes</button>
+                <button type="button" onclick="showTab('auditTab')">Audit & Evidence</button>
+                <button type="button" onclick="showTab('ingestTab')">Ingestion</button>
+                <button type="button" onclick="showTab('simulatedTab')">Dept DBs</button>
             </div>
             <div class="status-indicator">
                 <div class="dot active"></div>
@@ -30,8 +31,65 @@
         </header>
 
         <main>
-            <!-- Overview Tab -->
-            <div id="dashboardTab" class="tab-panel">
+            <!-- Identity Hub (UBID Explorer) -->
+            <div id="identityTab" class="tab-panel">
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2>Global Identity Explorer</h2>
+                        <div class="search-box glass-panel">
+                            <input type="text" id="globalUbidSearch" placeholder="Search by UBID (e.g. UBID-KA-2024-00000001)">
+                            <button class="btn btn-primary" onclick="searchUbid()">Search</button>
+                        </div>
+                    </div>
+                    
+                    <div id="ubidDetailsArea" style="display: none;">
+                        <div class="identity-grid">
+                            <!-- Unified View Card -->
+                            <div class="glass-panel identity-card main-id">
+                                <div class="card-header">
+                                    <span class="tag tag-success">Canonical State</span>
+                                    <h3 id="idBizName">---</h3>
+                                </div>
+                                <div class="id-meta">
+                                    <div class="meta-item"><label>UBID</label><span id="idUbid">---</span></div>
+                                    <div class="meta-item"><label>Type</label><span id="idType">---</span></div>
+                                    <div class="meta-item"><label>Registered</label><span id="idRegDate">---</span></div>
+                                </div>
+                                <div class="id-address">
+                                    <label>Verified Address</label>
+                                    <p id="idAddress">---</p>
+                                </div>
+                            </div>
+
+                            <!-- System Footprint Card -->
+                            <div class="glass-panel identity-card">
+                                <h3>System Footprint</h3>
+                                <div id="idSystemList" class="system-pills">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel-grid content-section">
+                            <div class="glass-panel panel-card">
+                                <h3>Data Lineage</h3>
+                                <div id="idLineage" class="lineage-tree">
+                                    <!-- Visualized lineage -->
+                                </div>
+                            </div>
+                            <div class="glass-panel panel-card">
+                                <h3>Cross-Dept Comparison</h3>
+                                <div id="idComparison" class="comparison-list">
+                                    <!-- Diff view -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Overview Tab (Renamed) -->
+            <div id="dashboardTab" class="tab-panel" style="display: none;">
                 <div class="stats-grid" id="statsGrid">
                     <div class="stat-card glass-panel skeleton"></div>
                     <div class="stat-card glass-panel skeleton"></div>
