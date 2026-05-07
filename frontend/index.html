@@ -10,9 +10,6 @@
     <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
-    <div class="bg-glow bg-glow-1"></div>
-    <div class="bg-glow bg-glow-2"></div>
-    
     <div class="app-container">
         <header class="glass-panel main-header">
             <div class="logo" onclick="showTab('dashboardTab')">
@@ -20,11 +17,11 @@
                 <h1>UBID Fabric <span class="tag">v0.2</span></h1>
             </div>
             <div class="nav-links">
-                <a href="#" class="active" onclick="showTab('dashboardTab')">Overview</a>
-                <a href="#" onclick="showTab('hubTab')">Routing & Hub</a>
-                <a href="#" onclick="showTab('auditTab')">Audit & Metrics</a>
-                <a href="#" onclick="showTab('ingestTab')">Ingestion Tools</a>
-                <a href="#" onclick="showTab('simulatedTab')">Simulated Depts</a>
+                <button type="button" class="active" onclick="showTab('dashboardTab')">Overview</button>
+                <button type="button" onclick="showTab('hubTab')">Routing & Hub</button>
+                <button type="button" onclick="showTab('auditTab')">Audit & Metrics</button>
+                <button type="button" onclick="showTab('ingestTab')">Ingestion Tools</button>
+                <button type="button" onclick="showTab('simulatedTab')">Simulated Depts</button>
             </div>
             <div class="status-indicator">
                 <div class="dot active"></div>
@@ -34,7 +31,7 @@
 
         <main>
             <!-- Overview Tab -->
-            <div id="dashboardTab">
+            <div id="dashboardTab" class="tab-panel">
                 <div class="stats-grid" id="statsGrid">
                     <div class="stat-card glass-panel skeleton"></div>
                     <div class="stat-card glass-panel skeleton"></div>
@@ -68,14 +65,14 @@
             </div>
 
             <!-- Routing & Hub Tab -->
-            <div id="hubTab" style="display: none;">
+            <div id="hubTab" class="tab-panel" style="display: none;">
                 <section class="content-section">
                     <div class="section-header">
                         <div>
                             <h2>Departmental Network Nodes</h2>
                             <p class="text-muted">Managed connections for every government system</p>
                         </div>
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div class="toolbar-actions">
                             <button class="btn btn-secondary btn-sm" onclick="showAddConnectorModal()">+ Ingress</button>
                             <button class="btn btn-primary btn-sm" onclick="showAddTargetModal()">+ Egress</button>
                         </div>
@@ -84,12 +81,13 @@
                         <!-- Populated by JS -->
                     </div>
                 </section>
-            </div>
 
-                <section class="content-section" style="margin-top: 2rem;">
+                <section class="content-section">
                     <div class="section-header">
-                        <h2>Dead Letter Queue (DLQ)</h2>
-                        <p class="text-muted">Failed propagations requiring manual review or retry.</p>
+                        <div>
+                            <h2>Dead Letter Queue (DLQ)</h2>
+                            <p class="text-muted">Failed propagations requiring manual review or retry.</p>
+                        </div>
                     </div>
                     <div class="glass-panel table-container">
                         <table class="data-table">
@@ -112,7 +110,7 @@
             </div>
 
             <!-- Audit & Metrics Tab -->
-            <div id="auditTab" style="display: none;">
+            <div id="auditTab" class="tab-panel" style="display: none;">
                 <div class="stats-grid" id="metricsGrid">
                     <div class="stat-card glass-panel skeleton"></div>
                     <div class="stat-card glass-panel skeleton"></div>
@@ -120,7 +118,7 @@
                     <div class="stat-card glass-panel skeleton"></div>
                 </div>
 
-                <section class="content-section" style="margin-top: 2rem;">
+                <section class="content-section">
                     <div class="section-header">
                         <h2>Causal Evidence Graph</h2>
                         <p class="text-muted">Trace the immutable chain of custody for any record.</p>
@@ -143,14 +141,14 @@
                     </div>
                 </section>
 
-                <div class="form-row" style="margin-top: 2rem;">
-                    <div class="glass-panel" style="flex: 1; padding: 1.5rem;">
+                <div class="panel-grid content-section">
+                    <div class="glass-panel panel-card">
                         <h3>Source System Breakdown</h3>
-                        <div id="sourceBreakdownChart" style="margin-top: 1rem;"></div>
+                        <div id="sourceBreakdownChart" class="chart-stack"></div>
                     </div>
-                    <div class="glass-panel" style="flex: 1; padding: 1.5rem;">
+                    <div class="glass-panel panel-card">
                         <h3>Drift Analytics</h3>
-                        <div class="table-container" style="margin-top: 1rem;">
+                        <div class="table-container">
                             <table class="data-table">
                                 <thead>
                                     <tr>
@@ -164,11 +162,11 @@
                     </div>
                 </div>
 
-                <section class="content-section" style="margin-top: 2rem;">
+                <section class="content-section">
                     <div class="section-header">
                         <h2>Time-Travel & Comparison</h2>
                     </div>
-                    <div class="glass-panel" style="padding: 1.5rem;">
+                    <div class="glass-panel panel-card">
                         <div class="form-row">
                             <div class="form-group">
                                 <label>UBID</label>
@@ -182,21 +180,21 @@
                                 <label>Timestamp B (Compare)</label>
                                 <input type="text" id="snapTimeB" placeholder="Optional">
                             </div>
-                            <div class="form-group" style="display: flex; align-items: flex-end; gap: 10px;">
+                            <div class="form-group form-actions">
                                 <button class="btn btn-secondary" onclick="runTimeTravel()">View A</button>
                                 <button class="btn btn-primary" onclick="runSnapshotCompare()">Compare A vs B</button>
                             </div>
                         </div>
-                        <pre id="timeTravelOutput" class="code-block" style="margin-top: 1rem; display: none;"></pre>
-                        <div id="snapshotOutput" style="display: none; margin-top: 1rem;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <pre id="timeTravelOutput" class="code-block output-block" style="display: none;"></pre>
+                        <div id="snapshotOutput" class="output-block" style="display: none;">
+                            <div class="compare-grid">
                                 <div>
-                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State A</h4>
-                                    <pre id="snapAOutput" class="code-block" style="min-height: 200px; margin: 0;"></pre>
+                                    <h4 class="compact-title">State A</h4>
+                                    <pre id="snapAOutput" class="code-block compare-output"></pre>
                                 </div>
                                 <div>
-                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">State B</h4>
-                                    <pre id="snapBOutput" class="code-block" style="min-height: 200px; margin: 0;"></pre>
+                                    <h4 class="compact-title">State B</h4>
+                                    <pre id="snapBOutput" class="code-block compare-output"></pre>
                                 </div>
                             </div>
                         </div>
@@ -205,9 +203,9 @@
             </div>
 
             <!-- Ingestion Tools Tab -->
-            <div id="ingestTab" style="display: none;">
-                <div class="form-row">
-                    <section class="glass-panel" style="flex: 1; padding: 1.5rem;">
+            <div id="ingestTab" class="tab-panel" style="display: none;">
+                <div class="panel-grid">
+                    <section class="glass-panel panel-card">
                         <div class="section-header">
                             <h2>CSV File Ingestion</h2>
                         </div>
@@ -224,16 +222,16 @@
                             </div>
                             <div class="form-group">
                                 <label>CSV File</label>
-                                <input type="file" id="csvFile" accept=".csv" required style="color: #fff;">
+                                <input type="file" id="csvFile" accept=".csv" required>
                             </div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">Upload & Process</button>
+                            <button type="submit" class="btn btn-primary btn-full">Upload & Process</button>
                         </form>
-                        <div id="fileUploadResult" style="display: none; margin-top: 1.5rem;">
+                        <div id="fileUploadResult" class="output-block" style="display: none;">
                             <pre id="fileResultJson" class="code-block"></pre>
                         </div>
                     </section>
 
-                    <section class="glass-panel" style="flex: 1; padding: 1.5rem;">
+                    <section class="glass-panel panel-card">
                         <div class="section-header">
                             <h2>API Sandbox</h2>
                         </div>
@@ -248,28 +246,28 @@
                             </div>
                             <div class="form-group">
                                 <label>Changes (JSON)</label>
-                                <textarea id="sbChanges" rows="3" style="font-family: monospace;">[{"field": "factory_name", "new": "Simulated Name"}]</textarea>
+                                <textarea id="sbChanges" rows="3" class="mono-input">[{"field": "factory_name", "new": "Simulated Name"}]</textarea>
                             </div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">Send Webhook</button>
+                            <button type="submit" class="btn btn-primary btn-full">Send Webhook</button>
                         </form>
-                        <div id="sbResponseArea" style="display: none; margin-top: 1rem;">
+                        <div id="sbResponseArea" class="output-block" style="display: none;">
                             <span id="sbStatusCode" class="tag"></span>
-                            <pre id="sbResponseJson" class="code-block" style="margin-top: 0.5rem;"></pre>
+                            <pre id="sbResponseJson" class="code-block response-json"></pre>
                         </div>
                     </section>
                 </div>
             </div>
 
             <!-- Simulated Depts Tab -->
-            <div id="simulatedTab" style="display: none;">
+            <div id="simulatedTab" class="tab-panel" style="display: none;">
                 <section class="content-section">
                     <div class="section-header">
                         <h2>Simulated Department Databases</h2>
                         <button class="btn btn-secondary btn-sm" onclick="fetchSimulatedState()">Refresh State</button>
                     </div>
-                    <p class="text-muted" style="margin-bottom: 2rem;">These are standalone "mini-databases" inside the departments, showing what they currently hold for each UBID.</p>
+                    <p class="text-muted section-note">These are standalone "mini-databases" inside the departments, showing what they currently hold for each UBID.</p>
                     
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+                    <div class="department-grid">
                         <!-- SWS Database -->
                         <div class="glass-panel department-db">
                             <div class="db-header">
@@ -306,7 +304,7 @@
                         <!-- Archive Database -->
                         <div class="glass-panel department-db">
                             <div class="db-header">
-                                <div class="dept-icon archive" style="background: #64748b;"></div>
+                                <div class="dept-icon archive"></div>
                                 <h3>Legacy Archive</h3>
                             </div>
                             <div id="archiveDbContent" class="db-content">

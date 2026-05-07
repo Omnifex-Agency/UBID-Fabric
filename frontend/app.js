@@ -64,7 +64,7 @@ async function fetchEvents() {
             const fields = event.field_changes.map(fc => fc.field_name).join(', ');
             tr.innerHTML = `
                 <td class="hash-cell" title="${event.event_id}">${event.event_id.substring(0, 12)}...</td>
-                <td><span class="badge" style="background: var(--zebra-striping); color: var(--primary);">${event.ubid}</span></td>
+                <td><span class="badge">${event.ubid}</span></td>
                 <td><span class="badge" style="background: rgba(45, 106, 79, 0.1); color: var(--accent);">${event.source_system}</span></td>
                 <td>T: ${event.lamport_ts}</td>
                 <td class="text-muted">${date.toLocaleTimeString()}</td>
@@ -81,17 +81,17 @@ async function fetchEvents() {
 
 function showTab(tabId) {
     // Hide all tabs
-    document.querySelectorAll('main > div').forEach(div => div.style.display = 'none');
+    document.querySelectorAll('main > .tab-panel').forEach(div => div.style.display = 'none');
     
     // Show selected tab
     const target = document.getElementById(tabId);
     if(target) target.style.display = 'block';
     
     // Update nav links
-    document.querySelectorAll('.nav-links a').forEach(a => {
-        a.classList.remove('active');
-        const onclickStr = a.getAttribute('onclick') || '';
-        if(onclickStr.includes(`'${tabId}'`)) a.classList.add('active');
+    document.querySelectorAll('.nav-links button').forEach(button => {
+        button.classList.remove('active');
+        const onclickStr = button.getAttribute('onclick') || '';
+        if(onclickStr.includes(`'${tabId}'`)) button.classList.add('active');
     });
 
     // Refresh tab data
@@ -210,7 +210,7 @@ async function fetchMetrics() {
                         <span>${s.system}</span><span>${s.events}</span>
                     </div>
                     <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px;">
-                        <div style="height: 100%; width: ${(s.events / data.total_events) * 100}%; background: var(--accent); border-radius: 3px;"></div>
+                        <div style="height: 100%; width: ${data.total_events ? (s.events / data.total_events) * 100 : 0}%; background: var(--accent); border-radius: 3px;"></div>
                     </div>
                 </div>
             `).join('');
@@ -298,6 +298,64 @@ async function handleFileUpload(e) {
     const res = await fetch(`${API_BASE}/api/ingest/file`, { method: 'POST', body: formData });
     document.getElementById('fileUploadResult').style.display = 'block';
     document.getElementById('fileResultJson').textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+async function handleConnectorSubmit(e) {
+    e.preventDefault();
+    const payload = {
+        name: document.getElementById('connName').value,
+        system_type: document.getElementById('connSystem').value.toUpperCase(),
+        connector_type: document.getElementById('connType').value,
+        config: {
+            url: document.getElementById('connUrl').value || null,
+            method: document.getElementById('connType').value === 'WEBHOOK' ? 'POST' : 'GET',
+            field_mappings: {}
+        }
+    };
+
+    const res = await fetch(`${API_BASE}/api/connectors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        alert('Connector setup failed');
+        return;
+    }
+
+    hideConnectorModal();
+    e.target.reset();
+    fetchNodes();
+}
+
+async function handleTargetSubmit(e) {
+    e.preventDefault();
+    const payload = {
+        name: document.getElementById('tName').value,
+        system_type: document.getElementById('tSystem').value.toUpperCase(),
+        base_url: document.getElementById('tUrl').value,
+        config: {
+            method: document.getElementById('tMethod').value,
+            field_mappings: {},
+            payload_template: {}
+        }
+    };
+
+    const res = await fetch(`${API_BASE}/api/targets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        alert('Target setup failed');
+        return;
+    }
+
+    hideTargetModal();
+    e.target.reset();
+    fetchNodes();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -403,9 +461,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sandboxForm')?.addEventListener('submit', handleSandboxSubmit);
     document.getElementById('fileUploadForm')?.addEventListener('submit', handleFileUpload);
     document.getElementById('mockEditForm')?.addEventListener('submit', handleMockEditSubmit);
+    document.getElementById('connectorForm')?.addEventListener('submit', handleConnectorSubmit);
+    document.getElementById('targetForm')?.addEventListener('submit', handleTargetSubmit);
     
     setInterval(() => {
-        const activeTab = document.querySelector('.nav-links a.active')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+        const activeTab = document.querySelector('.nav-links button.active')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
         if(activeTab) showTab(activeTab);
     }, 5000);
 });
