@@ -50,6 +50,29 @@ async def lifespan(app: FastAPI):
             try:
                 cur.execute("ALTER TABLE target_systems ADD COLUMN IF NOT EXISTS channel_type VARCHAR(50) DEFAULT 'WEBHOOK'")
                 conn.commit()
+                
+                # Auto-seed if empty
+                cur.execute("SELECT COUNT(*) FROM connectors")
+                if cur.fetchone()["count"] == 0:
+                    logger.info("auto_seeding_nodes")
+                    cur.execute("""
+                        INSERT INTO connectors (id, name, system_type, connector_type, config, is_active)
+                        VALUES 
+                            (gen_random_uuid(), 'Labour Webhook In', 'LABOUR', 'WEBHOOK', '{"webhook_secret": "labour-123"}', TRUE),
+                            (gen_random_uuid(), 'SWS API Poll', 'SWS', 'API_POLL', '{"url": "https://sws.karnataka.gov.in/api/v1/entities", "interval_seconds": 300}', TRUE),
+                            (gen_random_uuid(), 'KSPCB Snapshot Diff', 'KSPCB', 'SNAPSHOT_DIFF', '{"table": "consent_orders", "db": "kspcb_prod"}', TRUE),
+                            (gen_random_uuid(), 'Commercial Taxes CDC', 'COMMERCIAL_TAXES', 'CDC', '{"slot": "ct_fabric_slot"}', TRUE)
+                    """)
+                    cur.execute("""
+                        INSERT INTO target_systems (id, name, system_type, base_url, channel_type, is_active)
+                        VALUES 
+                            (gen_random_uuid(), 'Labour Notify Webhook', 'LABOUR', 'https://labour.gov.in/incoming', 'WEBHOOK', TRUE),
+                            (gen_random_uuid(), 'SWS Sync API', 'SWS', 'https://sws.gov.in/api/sync', 'REST_API', TRUE),
+                            (gen_random_uuid(), 'KSPCB Archive Snapshot', 'KSPCB', 'internal://kspcb-archive', 'SNAPSHOT', TRUE),
+                            (gen_random_uuid(), 'CT Revenue Queue', 'COMMERCIAL_TAXES', 'redis://ct-queue:6379', 'QUEUE', TRUE)
+                    """)
+                    conn.commit()
+
                 logger.info("db_migration_complete", table="target_systems", column="channel_type")
             except Exception as e:
                 logger.warning("db_migration_skipped", error=str(e))
