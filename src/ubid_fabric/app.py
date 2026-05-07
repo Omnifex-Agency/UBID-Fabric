@@ -1212,3 +1212,35 @@ async def root():
             "PII-Safe AI Calls",
         ]
     }
+
+@app.post("/api/registry/seed-nodes")
+async def seed_nodes():
+    """Seed the fabric with bidirectional connections for all major departments."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            # 1. Clear existing to prevent duplicates
+            cur.execute("DELETE FROM connectors")
+            cur.execute("DELETE FROM target_systems")
+
+            # 2. Seed Ingress Connectors
+            cur.execute("""
+                INSERT INTO connectors (id, name, system_type, connector_type, config, is_active)
+                VALUES 
+                    (gen_random_uuid(), 'Labour Webhook In', 'LABOUR', 'WEBHOOK', '{"webhook_secret": "labour-123"}', TRUE),
+                    (gen_random_uuid(), 'SWS API Poll', 'SWS', 'API_POLL', '{"url": "https://sws.karnataka.gov.in/api/v1/entities", "interval_seconds": 300}', TRUE),
+                    (gen_random_uuid(), 'KSPCB Snapshot Diff', 'KSPCB', 'SNAPSHOT_DIFF', '{"table": "consent_orders", "db": "kspcb_prod"}', TRUE),
+                    (gen_random_uuid(), 'Commercial Taxes CDC', 'COMMERCIAL_TAXES', 'CDC', '{"slot": "ct_fabric_slot"}', TRUE)
+            """)
+
+            # 3. Seed Egress Targets
+            cur.execute("""
+                INSERT INTO target_systems (id, name, system_type, base_url, channel_type, is_active)
+                VALUES 
+                    (gen_random_uuid(), 'Labour Notify Webhook', 'LABOUR', 'https://labour.gov.in/incoming', 'WEBHOOK', TRUE),
+                    (gen_random_uuid(), 'SWS Sync API', 'SWS', 'https://sws.gov.in/api/sync', 'REST_API', TRUE),
+                    (gen_random_uuid(), 'KSPCB Archive Snapshot', 'KSPCB', 'internal://kspcb-archive', 'SNAPSHOT', TRUE),
+                    (gen_random_uuid(), 'CT Revenue Queue', 'COMMERCIAL_TAXES', 'redis://ct-queue:6379', 'QUEUE', TRUE)
+            """)
+
+            conn.commit()
+            return {"status": "success", "message": "Bidirectional departmental nodes initialized."}

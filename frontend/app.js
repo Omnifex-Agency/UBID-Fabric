@@ -211,6 +211,19 @@ async function fetchNodes() {
     } catch(e) { console.error(e); }
 }
 
+async function seedAllNodes() {
+    if(!confirm("This will clear and reset all departmental node configurations. Proceed?")) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/registry/seed-nodes`, { method: 'POST' });
+        if(res.ok) {
+            alert("Bidirectional nodes initialized successfully!");
+            fetchNodes();
+        }
+    } catch(e) {
+        alert("Setup failed: " + e.message);
+    }
+}
+
 async function fetchDLQ() {
     try {
         const response = await fetch(`${API_BASE}/api/dlq`);
