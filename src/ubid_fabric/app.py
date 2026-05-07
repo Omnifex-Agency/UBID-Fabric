@@ -43,6 +43,18 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("ubid_fabric_starting", port=settings.port)
+    
+    # Simple migration: Add channel_type to target_systems if missing
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("ALTER TABLE target_systems ADD COLUMN IF NOT EXISTS channel_type VARCHAR(50) DEFAULT 'WEBHOOK'")
+                conn.commit()
+                logger.info("db_migration_complete", table="target_systems", column="channel_type")
+            except Exception as e:
+                logger.warning("db_migration_skipped", error=str(e))
+                conn.rollback()
+
     yield
     close_all()
     logger.info("ubid_fabric_shutdown")
