@@ -28,9 +28,10 @@ from ubid_fabric.evidence_graph import EvidenceGraph
 from ubid_fabric.models import (
     CaptureMethod, FieldChange, RawChange, UBIDRecord,
     Connector, ConnectorConfig, TargetSystem,
-    CanonicalFieldChange, EventCausality, EventMetadata, 
-    UBIDConfidence, EventType, CanonicalEvent,
-    EvidenceNode, EvidenceEdgeType, EvidenceNodeType
+    CanonicalFieldChange, Causality, EventMetadata, 
+    UBIDConfidence, ChangeType, CanonicalEvent,
+    EvidenceNode, EvidenceEdgeType, EvidenceNodeType,
+    PropagationChannel
 )
 from ubid_fabric.pipeline import Pipeline
 from ubid_fabric.ubid_resolver import UBIDResolver
@@ -275,12 +276,12 @@ async def retry_dlq(dlq_id: int):
                     ubid=raw_event["ubid"],
                     source_system=raw_event["source_system"],
                     entity_type=raw_event["entity_type"],
-                    event_type=EventType(raw_event["event_type"]),
+                    event_type=ChangeType(raw_event["event_type"]),
                     ubid_confidence=UBIDConfidence(raw_event["ubid_confidence"]),
                     lamport_timestamp=raw_event["lamport_ts"],
                     field_changes=[CanonicalFieldChange(**fc) for fc in field_changes_data],
                     payload_hash=raw_event["payload_hash"],
-                    causality=EventCausality(**(json.loads(raw_event["causality"]) if isinstance(raw_event["causality"], str) else raw_event["causality"])),
+                    causality=Causality(**(json.loads(raw_event["causality"]) if isinstance(raw_event["causality"], str) else raw_event["causality"])),
                     metadata=EventMetadata(**(json.loads(raw_event["metadata"]) if isinstance(raw_event["metadata"], str) else raw_event["metadata"]))
                 )
 
