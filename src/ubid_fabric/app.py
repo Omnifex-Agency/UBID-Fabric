@@ -995,17 +995,38 @@ mock_databases = {
     "ARCHIVE": {}
 }
 
-# Seed 20 synthetic records
+# Seed 20 synthetic records with consistent data to demonstrate propagation
 for i in range(1, 21):
     ubid = f"UBID-KA-2024-{i:08d}"
-    # Labour (Webhook - Source)
-    mock_databases["LABOUR"][ubid] = {"factory_name": f"Unit {i}", "workers": 50 + i, "status": "OPERATIONAL"}
-    # SWS (API - Target)
-    mock_databases["SWS"][ubid] = {"legal_name": f"Unit {i} PVT LTD", "license": f"L-{100+i}", "status": "ACTIVE"}
-    # KSPCB (API - Target)
-    mock_databases["KSPCB"][ubid] = {"industry_name": f"Unit {i}", "pollution": "ORANGE" if i%2==0 else "GREEN"}
-    # ARCHIVE (Snapshot - Legacy Target)
-    mock_databases["ARCHIVE"][ubid] = {"legacy_id": f"LEG-{5000+i}", "title": f"Old Unit {i}", "quality": "HISTORICAL"}
+    biz_name = f"Karnataka Industrial Unit {i}"
+    addr = f"No. {100+i}, Industrial Area, Hubli"
+    
+    # Labour (uses 'establishment_name' and 'workplace_address')
+    mock_databases["LABOUR"][ubid] = {
+        "establishment_name": biz_name, 
+        "workplace_address": addr,
+        "workers": 50 + i, 
+        "status": "OPERATIONAL"
+    }
+    # SWS (uses 'entity_name' and 'primary_address')
+    mock_databases["SWS"][ubid] = {
+        "entity_name": biz_name, 
+        "primary_address": addr,
+        "license": f"L-{100+i}", 
+        "status": "ACTIVE"
+    }
+    # KSPCB (uses 'industry_name' and 'factory_address')
+    mock_databases["KSPCB"][ubid] = {
+        "industry_name": biz_name, 
+        "factory_address": addr,
+        "pollution": "ORANGE" if i%2==0 else "GREEN"
+    }
+    # ARCHIVE (Legacy)
+    mock_databases["ARCHIVE"][ubid] = {
+        "legacy_id": f"LEG-{5000+i}", 
+        "title": f"Old {biz_name}", 
+        "quality": "HISTORICAL"
+    }
 
 @app.post("/mock/update")
 async def update_mock_system_record(payload: dict):
