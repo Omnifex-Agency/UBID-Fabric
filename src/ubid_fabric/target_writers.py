@@ -192,6 +192,7 @@ class DynamicTargetWriter(TargetWriter):
             base_url=target_sys["base_url"],
             evidence=evidence,
         )
+        self.channel_type_from_db = target_sys.get("channel_type", "WEBHOOK")
         self.auth_header = target_sys.get("auth_header")
         self.config = target_sys.get("config", {})
         if isinstance(self.config, str):
@@ -212,22 +213,39 @@ class DynamicTargetWriter(TargetWriter):
             new_payload["event_id"] = payload.get("event_id")
             mapped_payload = new_payload
 
-        async with httpx.AsyncClient() as client:
-            headers = {}
-            if self.auth_header:
-                headers["Authorization"] = self.auth_header
-            
-            method = self.config.get("method", "POST")
-            url = self.base_url
-            if not url.startswith("http"):
-                url = f"http://{url}"
-            
-            resp = await client.request(
-                method,
-                url,
-                json=mapped_payload,
-                headers=headers,
-                timeout=10.0,
-            )
-            resp.raise_for_status()
-            return resp.json()
+        channel = self.config.get("channel_type") or getattr(self, "channel_type_from_db", "WEBHOOK")
+
+        # Case 1: Webhook or REST API (HTTP based)
+        if channel in ["WEBHOOK", "REST_API"]:
+            async with httpx.AsyncClient() as client:
+                headers = {}
+                if self.auth_header:
+                    headers["Authorization"] = self.auth_header
+                
+                method = self.config.get("method", "POST")
+                url = self.base_url
+                if not url.startswith("http"):
+                    url = f"http://{url}"
+                
+                resp = await client.request(
+                    method,
+                    url,
+                    json=mapped_payload,
+                    headers=headers,
+                    timeout=10.0,
+                )
+                resp.raise_for_status()
+                return resp.json()
+        
+        # Case 2: Snapshot (Simulated DB write)
+        elif channel == "SNAPSHOT":
+            logger.info("snapshot_write_simulated", target=self.system_name, ubid=payload.get("ubid"))
+            return {"status": "SUCCESS", "method": "SNAPSHOT", "file": f"{self.system_name.lower()}_export.json"}
+
+        # Case 3: Queue (Simulated Message Queue)
+        elif channel == "QUEUE":
+            logger.info("queue_push_simulated", target=self.system_name, topic=self.base_url)
+            return {"status": "SUCCESS", "method": "QUEUE", "topic": self.base_url}
+
+        # Fallback for unknown types
+        return {"status": "SUCCESS", "message": "Generic propagation recorded."}

@@ -198,7 +198,7 @@ async function fetchNodes() {
                     <div class="channel ${node.egress?.is_active ? 'active' : ''}">
                         <div class="channel-info">
                             <span class="channel-label">Egress (Out)</span>
-                            <span class="channel-status">${node.egress ? 'Connected' : 'Not Setup'}</span>
+                            <span class="channel-status">${node.egress ? node.egress.channel_type : 'Not Setup'}</span>
                         </div>
                         <div class="dot ${node.egress?.is_active ? 'active' : ''}"></div>
                     </div>

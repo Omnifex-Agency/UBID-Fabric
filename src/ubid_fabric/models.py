@@ -32,6 +32,12 @@ class ChangeType(str, Enum):
     COMPENSATION = "COMPENSATION"
     REPLAY = "REPLAY"
 
+class PropagationChannel(str, Enum):
+    WEBHOOK = "WEBHOOK"
+    REST_API = "REST_API"
+    SNAPSHOT = "SNAPSHOT"
+    QUEUE = "QUEUE"
+
 class CRDTType(str, Enum):
     LWW_REGISTER = "LWW_REGISTER"
     OR_SET = "OR_SET"
@@ -154,6 +160,7 @@ class TargetSystem(BaseModel):
     name: str
     system_type: str
     base_url: str
+    channel_type: PropagationChannel = PropagationChannel.WEBHOOK
     auth_header: str | None = None
     config: dict[str, Any] = {} # { method, payload_template, field_mappings }
     is_active: bool = True

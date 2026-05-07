@@ -462,8 +462,8 @@ async def create_target(target: TargetSystem):
             import json
             cur.execute(
                 """
-                INSERT INTO target_systems (id, name, system_type, base_url, auth_header, config, is_active)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO target_systems (id, name, system_type, base_url, channel_type, auth_header, config, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -471,6 +471,7 @@ async def create_target(target: TargetSystem):
                     target.name,
                     target.system_type,
                     target.base_url,
+                    target.channel_type.value,
                     target.auth_header,
                     json.dumps(target.config),
                     target.is_active
@@ -1126,7 +1127,7 @@ async def list_departmental_nodes():
             connectors = cur.fetchall()
             
             # Fetch all egress (targets)
-            cur.execute("SELECT id, name, system_type, is_active FROM target_systems")
+            cur.execute("SELECT id, name, system_type, channel_type, is_active FROM target_systems")
             targets = cur.fetchall()
             
             # Group by system_type
@@ -1154,6 +1155,7 @@ async def list_departmental_nodes():
                 nodes[st]["egress"] = {
                     "id": str(t["id"]),
                     "name": t["name"],
+                    "channel_type": t.get("channel_type", "WEBHOOK"),
                     "is_active": t["is_active"]
                 }
                 
